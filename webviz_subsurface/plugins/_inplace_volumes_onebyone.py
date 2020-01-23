@@ -316,7 +316,6 @@ https://github.com/equinor/webviz-subsurface-testdata/blob/master/aggregated_dat
                     html.Span("Volumetric calculation:", style={"font-weight": "bold"}),
                     dcc.Dropdown(
                         id=self.ids("response"),
-                        style={"width": "75%"},
                         options=[
                             {"label": VOLUME_TERMINOLOGY.get(i, i), "value": i,}
                             for i in self.responses
@@ -357,25 +356,16 @@ https://github.com/equinor/webviz-subsurface-testdata/blob/master/aggregated_dat
             for selector in self.selectors
         ]
 
-    @staticmethod
-    def set_grid_layout(columns):
-        return {
-            "display": "grid",
-            "alignContent": "space-around",
-            "justifyContent": "space-between",
-            "gridTemplateColumns": f"{columns}",
-        }
-
     @property
     def layout(self):
         """Main layout"""
         return html.Div(
             id=self.ids("layout"),
             children=[
-                html.Div(
-                    style=self.set_grid_layout("1fr 3fr 2fr"),
+                wcc.FlexBox(
                     children=[
                         html.Div(
+                            style={"flex": 1},
                             children=[
                                 self.selector("Ensemble", "ensemble", "ENSEMBLE"),
                                 self.selector("Grid source", "source", "SOURCE"),
@@ -384,12 +374,12 @@ https://github.com/equinor/webviz-subsurface-testdata/blob/master/aggregated_dat
                                     id=self.ids("filters"),
                                     children=self.filter_selectors,
                                 ),
-                            ]
+                            ],
                         ),
                         html.Div(
+                            style={"flex": 3},
                             children=[
-                                html.Div(
-                                    style=self.set_grid_layout("2fr 1fr"),
+                                wcc.FlexBox(
                                     children=[
                                         self.response_selector,
                                         self.plot_selector,
@@ -410,11 +400,11 @@ https://github.com/equinor/webviz-subsurface-testdata/blob/master/aggregated_dat
                                         for i in InplaceVolumesOneByOne.TABLE_STATISTICS
                                     ],
                                 ),
-                            ]
+                            ],
                         ),
                         html.Div(
                             id=self.ids("tornado-wrapper"),
-                            style={"visibility": "visible"},
+                            style={"visibility": "visible", "flex": 2},
                             children=[self.tornadoplot.layout],
                         ),
                     ],

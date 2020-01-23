@@ -260,25 +260,15 @@ https://github.com/equinor/webviz-subsurface-testdata/blob/master/aggregated_dat
             ]
         )
 
-    @staticmethod
-    def set_grid_layout(columns):
-        return {
-            "display": "grid",
-            "alignContent": "space-around",
-            "justifyContent": "space-between",
-            "gridTemplateColumns": f"{columns}",
-        }
-
     @property
     def layout(self):
-        return html.Div(
+        return wcc.FlexBox(
             id=self.ids("layout"),
-            style=self.set_grid_layout("4fr 2fr"),
             children=[
                 html.Div(
-                    [
-                        html.Div(
-                            style=self.set_grid_layout("1fr 1fr 1fr"),
+                    style={"flex": 2},
+                    children=[
+                        wcc.FlexBox(
                             children=[
                                 self.ensemble_selector,
                                 self.smry_selector,
@@ -316,10 +306,12 @@ https://github.com/equinor/webviz-subsurface-testdata/blob/master/aggregated_dat
                                 ),
                             ]
                         ),
-                    ]
+                    ],
                 ),
                 html.Div(
-                    id=self.ids("tornado-wrapper"), children=self.tornadoplot.layout
+                    style={"flex": 1},
+                    id=self.ids("tornado-wrapper"),
+                    children=self.tornadoplot.layout,
                 ),
             ],
         )
