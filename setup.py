@@ -40,8 +40,14 @@ setup(
             "WellCrossSectionFMU = webviz_subsurface.plugins:WellCrossSectionFMU",
             "ParameterParallelCoordinates = "
             + "webviz_subsurface.plugins:ParameterParallelCoordinates",
+<<<<<<< HEAD
             "RunningTimeAnalysisFMU = webviz_subsurface.plugins:RunningTimeAnalysisFMU",
             "RelativePermeability = webviz_subsurface.plugins:RelativePermeability",
+            "Rft =  webviz_subsurface.plugins:Rft",
+=======
+            "RunningTimeAnalysisFMU =  webviz_subsurface.plugins:RunningTimeAnalysisFMU",
+            "RftPlotter =  webviz_subsurface.plugins:RftPlotter",
+>>>>>>> Refactor
         ]
     },
     install_requires=[
@@ -51,7 +57,7 @@ setup(
         "pillow>=6.1",
         "pyscal>=0.4.1",
         "scipy>=1.2",
-        "webviz-config>=0.0.48",
+        "webviz-config>=0.0.55",
         "webviz-subsurface-components>=0.0.23",
         "xtgeo>=2.8",
     ],
