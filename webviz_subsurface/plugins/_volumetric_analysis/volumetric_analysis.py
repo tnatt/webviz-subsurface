@@ -34,6 +34,10 @@ The fluid type is determined by the column name suffixes, either (_OIL or _GAS).
 is removed and a `FLUID_ZONE` column is added to be used as a filter or selector. Volumes from
 the Water zone will be calculated if Total volumes are included.
 
+Property columns (e.g. PORO, SW) are automatically computed from the data as long as
+relevant volumetric columns are present. NET volume and NTG can be computed from a FACIES column
+by defining the 'non_net_facies' (list of facies).
+
 Input can be given either as aggregated `csv` files or as ensemble name(s)
 defined in `shared_settings` (with volumetric `csv` files stored per realization).
 
@@ -91,6 +95,7 @@ aggregated_data/parameters.csv)
         volfiles: dict = None,
         volfolder: str = "share/results/volumes",
         drop_constants: bool = True,
+        non_net_facies: Optional[List[str]] = None,
     ):
 
         super().__init__()
@@ -118,7 +123,7 @@ aggregated_data/parameters.csv)
                 'Incorrent arguments. Either provide a "csvfile" or "ensembles" and "volfiles"'
             )
         if csvfile_vol:
-            volume_table = read_csv(csvfile_vol)
+            volumes_table = read_csv(csvfile_vol)
             parameters: Optional[pd.DataFrame] = (
                 read_csv(csvfile_parameters) if csvfile_parameters else None
             )
@@ -134,15 +139,19 @@ aggregated_data/parameters.csv)
                 )
             )
             parameters = self.emodel.load_parameters()
-
-            volume_table = extract_volumes(self.emodel, volfolder, volfiles)
+            volumes_table = extract_volumes(self.emodel, volfolder, volfiles)
 
         else:
             raise ValueError(
                 'Incorrent arguments. Either provide a "csvfile" or "ensembles" and "volfiles"'
             )
 
-        self.volmodel = InplaceVolumesModel(volume_table, parameters, drop_constants)
+        self.volmodel = InplaceVolumesModel(
+            volumes_table=volumes_table,
+            parameter_table=parameters,
+            drop_constants=drop_constants,
+            non_net_facies=non_net_facies,
+        )
         self.theme = webviz_settings.theme
         self.set_callbacks(app)
 

@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-
+import warnings
 import numpy as np
 import pandas as pd
 from webviz_config.webviz_store import webvizstore
@@ -32,34 +32,43 @@ class InplaceVolumesModel:
         "SENSTYPE",
     ]
 
+    VOLCOL_ORDER = [
+        "STOIIP",
+        "GIIP",
+        "ASSOCIATEDOIL",
+        "ASSOCIATEDGAS",
+        "BULK",
+        "NET",
+        "PORV",
+        "HCPV",
+    ]
+
     def __init__(
         self,
         volumes_table: pd.DataFrame,
         parameter_table: Optional[pd.DataFrame] = None,
+        non_net_facies: Optional[List[str]] = None,
         drop_constants: bool = False,
     ):
+        self._parameters = []
+        self._sensitivities = []
+        self._parameterdf = (
+            parameter_table if parameter_table is not None else pd.DataFrame()
+        )
+        selectors = [x for x in volumes_table.columns if x in self.POSSIBLE_SELECTORS]
 
-        selector_columns = [
-            x for x in volumes_table.columns if x in self.POSSIBLE_SELECTORS
-        ]
-
-        # ensure that dataframe is aligned on axis
-        volumes_table = volumes_table.groupby(selector_columns).sum().reset_index()
-        # print(volumes_table)
-
-        # stack dataframe on fluid zone and add fluid as column istead of a column suffix
-        # add water zone columns if TOTAL volumes present
-        for col in [
-            x.replace("_TOTAL", "")
-            for x in volumes_table.columns
-            if x.endswith("_TOTAL")
-        ]:
-            volumes_table[f"{col}_WATER"] = (
-                volumes_table[f"{col}_TOTAL"]
-                - volumes_table.get(f"{col}_OIL", 0)
-                - volumes_table.get(f"{col}_GAS", 0)
+        # It is not yet supprted to
+        if volumes_table[selectors].isnull().values.any():
+            raise TypeError(
+                f"Selectors {[x for x in selectors if x not in ['ENSEMBLE', 'SOURCE', 'REAL']]} "
+                "needs to be defined for all sources",
             )
 
+        # compute water zone volumes if total volumes are present
+        if any(col.endswith("_TOTAL") for col in volumes_table.columns):
+            volumes_table = self._compute_water_zone_volumes(volumes_table, selectors)
+
+        # stack dataframe on fluid zone and add fluid as column istead of a column suffix
         dfs = []
         for fluid in ["OIL", "GAS", "WATER"]:
             fluid_columns = [
@@ -67,65 +76,50 @@ class InplaceVolumesModel:
             ]
             if not fluid_columns:
                 continue
-            df = volumes_table[selector_columns + fluid_columns].copy()
+            df = volumes_table[selectors + fluid_columns].copy()
             df.columns = df.columns.str.replace(f"_{fluid}", "")
             df["FLUID_ZONE"] = fluid.lower()
+            # Rename PORE to PORV (PORE will be deprecated..)
+            if "PORE" in df:
+                df.rename(columns={"PORE": "PORV"}, inplace=True)
             dfs.append(df)
+        self._dataframe = pd.concat(dfs)
 
-        volumes_table = pd.concat(dfs)
-
-        # Rename PORE to PORV (PORE will be deprecated..)
-        if "PORE" in volumes_table:
-            volumes_table.rename(columns={"PORE": "PORV"}, inplace=True)
+        # Set NET volumes based on facies if non_net_facies in input
+        if non_net_facies is not None and "FACIES" in self._dataframe:
+            self._dataframe["NET"] = self._dataframe["BULK"]
+            self._dataframe.loc[
+                self._dataframe["FACIES"].isin(non_net_facies), "NET"
+            ] = 0
 
         # If parameters present check if the case is a sensitivity run
         # and merge sensitivity columns into the dataframe
-        self._parameters: List[str] = []
         if parameter_table is not None:
-            self._prepare_parameter_data(parameter_table, drop_constants=drop_constants)
-
-        self._designrun = (
-            parameter_table is not None and "SENSNAME" in parameter_table.columns
-        )
-        if self._designrun:
-
-            # hack!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            parameter_table.replace("simulation", "p10_p90", inplace=True)
-
-            parameter_table["SENSTYPE"] = parameter_table.apply(
-                lambda row: find_sens_type(row.SENSCASE)
-                if not pd.isnull(row.SENSCASE)
-                else np.nan,
-                axis=1,
+            self._parameterdf = self._prepare_parameter_data(
+                parameter_table, drop_constants
             )
-        self._sensrun = self._designrun and (
-            parameter_table["SENSNAME"].nunique() > 1
-            or (
-                parameter_table["SENSNAME"].nunique() == 1
-                and parameter_table["SENSTYPE"].unique() != ["mc"]
-            )
-        )
+            self._parameters = [
+                x for x in self._parameterdf.columns if x not in self.SENS_COLUMNS
+            ]
+            if "SENSNAME" in self._parameterdf:
+                self._add_sensitivity_columns()
+                self._sensitivities = list(self._dataframe["SENSNAME"].unique())
+            self._sensrun = "SENSNAME" in self._parameterdf
 
-        sens_params_table = (
-            parameter_table[self.SENS_COLUMNS] if self._designrun else None
-        )
+        # set column order
+        colorder = self.selectors + self.VOLCOL_ORDER
+        self._dataframe = self._dataframe[
+            [x for x in colorder if x in self._dataframe]
+            + [x for x in self._dataframe if x not in colorder]
+        ]
 
-        # Merge into one dataframe
-        self._dataframe = (
-            volumes_table
-            if sens_params_table is None
-            else pd.merge(volumes_table, sens_params_table, on=["ENSEMBLE", "REAL"])
-        )
+        self._dataframe.sort_values(by=["ENSEMBLE", "REAL"], inplace=True)
 
-        if self._sensrun and self._dataframe["SENSNAME"].isnull().values.any():
-            df = self._dataframe
-            raise ValueError(
-                "Ensembles with and without sensitivity data mixed - this is not supported \n"
-                f"Sensitivity ensembles: {df.loc[~df['SENSNAME'].isnull()]['ENSEMBLE'].unique()} "
-                f"Non-sensitivity ensembles: {df.loc[df['SENSNAME'].isnull()]['ENSEMBLE'].unique()}"
-            )
+        # compute and set property columns
+        self._set_initial_property_columns()
+        self._dataframe = self.compute_property_columns(self._dataframe)
 
-        self.set_initial_property_columns()
+    # ---------------------------------------------------------------------------------
 
     @property
     def dataframe(self) -> pd.DataFrame:
@@ -140,8 +134,8 @@ class InplaceVolumesModel:
         return self._sensrun
 
     @property
-    def sensitivities(self) -> bool:
-        return list(self._dataframe["SENSNAME"].unique()) if self.sensrun else None
+    def sensitivities(self) -> List[str]:
+        return self._sensitivities
 
     @property
     def sources(self) -> List[str]:
@@ -179,17 +173,46 @@ class InplaceVolumesModel:
     def parameters(self) -> List[str]:
         return self._parameters
 
-    def set_initial_property_columns(self) -> None:
+    @staticmethod
+    def _compute_water_zone_volumes(
+        voldf: pd.DataFrame, selectors: list
+    ) -> pd.DataFrame:
+        """Copute water zone volumes by subtracting HC-zone volumes from
+        TOTAL volumes"""
+        supported_columns = ["BULK_TOTAL", "NET_TOTAL", "PORE_TOTAL", "PORV_TOTAL"]
+        # Format check
+        for src, df in voldf.groupby("SOURCE"):
+            volcols = [col for col in df if col not in selectors]
+            if not any(col in volcols for col in supported_columns):
+                continue
+            if df[volcols].isnull().values.any():
+                warnings.warn(
+                    f"WARNING: Cannot calculate water zone volumes for source {src}, "
+                    "due to wrong format in input volume file. \nTo ensure correct format "
+                    "use: https://equinor.github.io/fmu-tools/fmu.tools.rms.html#fmu.tools."
+                    "rms.volumetrics.merge_rms_volumetrics"
+                )
+            return voldf
+
+        for col in [x.replace("_TOTAL", "") for x in voldf if x in supported_columns]:
+            voldf[f"{col}_WATER"] = (
+                voldf[f"{col}_TOTAL"]
+                - voldf.get(f"{col}_OIL", 0)
+                - voldf.get(f"{col}_GAS", 0)
+            )
+        return voldf
+
+    def _set_initial_property_columns(self) -> None:
+        """Create list of properties that can be computed based on
+        available volume columns"""
         self._property_columns = []
-        # if Net not given, Net is equal to Bulk
-        net_column = "NET" if "NET" in self._dataframe else "BULK"
 
         if all(col in self._dataframe for col in ["NET", "BULK"]):
             self._property_columns.append("NTG")
-
-        if all(col in self._dataframe for col in [net_column, "PORV"]):
+        if all(col in self._dataframe for col in ["BULK", "PORV"]):
             self._property_columns.append("PORO")
-
+        if all(col in self._dataframe for col in ["NET", "PORV"]):
+            self._property_columns.append("PORO (net)")
         if all(col in self._dataframe for col in ["HCPV", "PORV"]):
             self._property_columns.append("SW")
 
@@ -198,20 +221,52 @@ class InplaceVolumesModel:
                 pvt = "BO" if vol_column == "STOIIP" else "BG"
                 self._property_columns.append(pvt)
 
-        self._dataframe = self.compute_property_columns(self._dataframe)
+    def _add_sensitivity_columns(self) -> None:
+        """Add sensitivity information columns from the parameters to the
+        dataframe, and raise error if not all ensembles have sensitivity data"""
+
+        self._parameterdf["SENSTYPE"] = self._parameterdf.apply(
+            lambda row: find_sens_type(row.SENSCASE)
+            if not pd.isnull(row.SENSCASE)
+            else np.nan,
+            axis=1,
+        )
+        sens_params_table = self._parameterdf[self.SENS_COLUMNS]
+
+        # TODO do this per ensemble?
+        sensrun = sens_params_table["SENSNAME"].nunique() > 1 or (
+            sens_params_table["SENSNAME"].nunique() == 1
+            and sens_params_table["SENSTYPE"].unique() != ["mc"]
+        )
+
+        # raise error if mixed ensemble types
+        if sensrun and sens_params_table["SENSNAME"].isnull().values.any():
+            df = sens_params_table
+            raise ValueError(
+                "Ensembles with and without sensitivity data mixed - this is not supported \n"
+                f"Sensitivity ensembles: {df.loc[~df['SENSNAME'].isnull()]['ENSEMBLE'].unique()} "
+                f"Non-sensitivity ensembles: {df.loc[df['SENSNAME'].isnull()]['ENSEMBLE'].unique()}"
+            )
+
+        # Merge into one dataframe
+        self._dataframe = pd.merge(
+            self._dataframe, sens_params_table, on=["ENSEMBLE", "REAL"]
+        )
 
     def compute_property_columns(
         self, dframe: pd.DataFrame, properties: Optional[list] = None
     ) -> pd.DataFrame:
-
+        """Compute property columns. As default all property columns are computed,
+        but which properties to compute can be given as input"""
+        dframe = dframe.copy()
         properties = self.property_columns if properties is None else properties
 
-        # if NTG not given Net is equal to bulk
-        net_column = "NET" if "NET" in dframe.columns else "BULK"
         if "NTG" in properties:
-            dframe["NTG"] = dframe[net_column] / dframe["BULK"]
+            dframe["NTG"] = dframe["NET"] / dframe["BULK"]
         if "PORO" in properties:
-            dframe["PORO"] = dframe["PORV"] / dframe[net_column]
+            if "NET" in dframe.columns:
+                dframe["PORO (net)"] = dframe["PORV"] / dframe["NET"]
+            dframe["PORO"] = dframe["PORV"] / dframe["BULK"]
         if "SW" in properties:
             dframe["SW"] = 1 - (dframe["HCPV"] / dframe["PORV"])
         if "BO" in properties:
@@ -224,26 +279,31 @@ class InplaceVolumesModel:
 
     def get_df(
         self,
-        filters: Optional[dict] = None,
+        filters: Optional[Dict[str, list]] = None,
         groups: Optional[list] = None,
         parameters: Optional[list] = None,
         properties: Optional[list] = None,
     ) -> pd.DataFrame:
-
+        """Function to retrieve a dataframe with volumetrics and properties. Parameters
+        can be added to the dataframe if parameters are available in the instance.
+        Filters are supported on dictionary form with 'column_name': [list ov values to keep].
+        The final dataframe can be grouped by giving in a list of columns to group on.
+        """
         dframe = self.dataframe.copy()
 
         groups = groups if groups is not None else []
+        filters = filters if filters is not None else {}
         parameters = parameters if parameters is not None else []
 
-        if parameters:
+        if parameters and self.parameters:
             columns = parameters + ["REAL", "ENSEMBLE"]
             dframe = pd.merge(
                 dframe, self.parameter_df[columns], on=["REAL", "ENSEMBLE"]
             )
-        dframe = filter_df(dframe, filters)
+        if filters:
+            dframe = filter_df(dframe, filters)
 
         prevent_sum_over = ["REAL", "ENSEMBLE", "SOURCE"]
-
         if groups:
             sum_over_groups = groups + [x for x in prevent_sum_over if x not in groups]
 
@@ -255,11 +315,16 @@ class InplaceVolumesModel:
             dframe = dframe.groupby(groups).mean().reset_index()
 
         dframe = self.compute_property_columns(dframe, properties)
+        if "FLUID_ZONE" not in groups:
+            if not filters.get("FLUID_ZONE") == ["oil"]:
+                dframe["BO"] = "NA"
+            if not filters.get("FLUID_ZONE") == ["gas"]:
+                dframe["BG"] = "NA"
         return dframe
 
     def _prepare_parameter_data(
         self, parameter_table: pd.DataFrame, drop_constants: bool
-    ) -> None:
+    ) -> pd.DataFrame:
         """
         Different data preparations on the parameters, before storing them as an attribute.
         Option to drop parameters with constant values. Prefixes on parameters from GEN_KW
@@ -308,13 +373,14 @@ class InplaceVolumesModel:
         # Drop columns if duplicate names
         parameter_table = parameter_table.loc[:, ~parameter_table.columns.duplicated()]
 
-        self._parameterdf = parameter_table
-        self._parameters = [
-            x for x in parameter_table.columns if x not in self.SENS_COLUMNS
-        ]
+        return parameter_table
 
 
 def filter_df(dframe: pd.DataFrame, filters: dict) -> pd.DataFrame:
+    """
+    Filter dataframe using dictionary with form
+    'column_name': [list ov values to keep]
+    """
     for filt, values in filters.items():
         dframe = dframe.loc[dframe[filt].isin(values)]
     return dframe

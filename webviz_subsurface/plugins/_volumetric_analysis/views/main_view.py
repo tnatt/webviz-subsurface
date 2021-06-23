@@ -20,9 +20,9 @@ def main_view(
 ) -> dcc.Tabs:
 
     tabs = [
-        make_tab(
+        wcc.Tab(
             label="Inplace distributions",
-            id_value="voldist",
+            value="voldist",
             children=tab_view_layout(
                 main_layout=distributions_main_layout(
                     uuid=get_uuid("main-voldist"), volumemodel=volumemodel
@@ -46,77 +46,22 @@ def main_view(
                                 uuid=get_uuid("filters"),
                                 tab="voldist",
                                 volumemodel=volumemodel,
+                                filters=[
+                                    x for x in volumemodel.selectors if x != "SENSTYPE"
+                                ],
                             )
                         ],
                     },
                 ),
             ),
-        ),
-        make_tab(
-            label="Source comparison",
-            id_value="src-comp",
-            children=tab_view_layout(
-                main_layout=[
-                    html.Div(
-                        "Under development - page for comparing geo/sim/eclipse "
-                        "volumes and identify differences",
-                        style={"margin": "50px", "font-size": "20px"},
-                    )
-                ],
-                selections_details=OrderedDict(
-                    Selections={
-                        "open": True,
-                        "children": [],
-                    },
-                    Filters={
-                        "open": True,
-                        "children": [
-                            filter_layout(
-                                uuid=get_uuid("filters"),
-                                tab="src-comp",
-                                volumemodel=volumemodel,
-                            )
-                        ],
-                    },
-                ),
-            ),
-        ),
-        make_tab(
-            label="Ensemble comparison",
-            id_value="ens-comp",
-            children=tab_view_layout(
-                main_layout=[
-                    html.Div(
-                        "Under development - page for analyzing volume changes "
-                        "and causes between ensembles (e.g between two model revision)",
-                        style={"margin": "50px", "font-size": "20px"},
-                    )
-                ],
-                selections_details=OrderedDict(
-                    Selections={
-                        "open": True,
-                        "children": [],
-                    },
-                    Filters={
-                        "open": True,
-                        "children": [
-                            filter_layout(
-                                uuid=get_uuid("filters"),
-                                tab="ens-comp",
-                                volumemodel=volumemodel,
-                            )
-                        ],
-                    },
-                ),
-            ),
-        ),
+        )
     ]
 
     if volumemodel.sensrun:
         tabs.append(
-            make_tab(
+            wcc.Tab(
                 label="Tornadoplots",
-                id_value="tornado",
+                value="tornado",
                 children=tab_view_layout(
                     main_layout=tornado_main_layout(
                         uuid=get_uuid("main-tornado"),
@@ -129,7 +74,6 @@ def main_view(
                                     uuid=get_uuid("selections"),
                                     tab="tornado",
                                     volumemodel=volumemodel,
-                                    theme=theme,
                                 )
                             ],
                         },
@@ -159,8 +103,72 @@ def main_view(
                 ),
             )
         )
+    if len(volumemodel.sources) > 1:
+        tabs.append(
+            wcc.Tab(
+                label="Source comparison",
+                value="src-comp",
+                children=tab_view_layout(
+                    main_layout=[
+                        html.Div(
+                            "Under development - page for comparing geo/sim/eclipse "
+                            "volumes and identify differences",
+                            style={"margin": "50px", "font-size": "20px"},
+                        )
+                    ],
+                    selections_details=OrderedDict(
+                        Selections={
+                            "open": True,
+                            "children": [],
+                        },
+                        Filters={
+                            "open": True,
+                            "children": [
+                                filter_layout(
+                                    uuid=get_uuid("filters"),
+                                    tab="src-comp",
+                                    volumemodel=volumemodel,
+                                )
+                            ],
+                        },
+                    ),
+                ),
+            )
+        )
+    if len(volumemodel.ensembles) > 1:
+        tabs.append(
+            wcc.Tab(
+                label="Ensemble comparison",
+                value="ens-comp",
+                children=tab_view_layout(
+                    main_layout=[
+                        html.Div(
+                            "Under development - page for analyzing volume changes "
+                            "and causes between ensembles (e.g between two model revision)",
+                            style={"margin": "50px", "font-size": "20px"},
+                        )
+                    ],
+                    selections_details=OrderedDict(
+                        Selections={
+                            "open": True,
+                            "children": [],
+                        },
+                        Filters={
+                            "open": True,
+                            "children": [
+                                filter_layout(
+                                    uuid=get_uuid("filters"),
+                                    tab="ens-comp",
+                                    volumemodel=volumemodel,
+                                )
+                            ],
+                        },
+                    ),
+                ),
+            )
+        )
 
-    return dcc.Tabs(
+    return wcc.Tabs(
         id=get_uuid("tabs"),
         value="voldist",
         style={"width": "100%"},
@@ -169,57 +177,21 @@ def main_view(
     )
 
 
-def make_tab(label: str, id_value: str, children: list) -> dcc.Tab:
-    tab_style = {
-        "borderBottom": "1px solid #d6d6d6",
-        "padding": "6px",
-        "fontWeight": "bold",
-    }
-
-    tab_selected_style = {
-        "borderTop": "1px solid #d6d6d6",
-        "borderBottom": "1px solid #d6d6d6",
-        "backgroundColor": "#007079",
-        "color": "white",
-        "padding": "6px",
-    }
-    return dcc.Tab(
-        label=label,
-        value=id_value,
-        style=tab_style,
-        selected_style=tab_selected_style,
-        children=children,
-    )
-
-
 def tab_view_layout(main_layout: list, selections_details: OrderedDict) -> wcc.FlexBox:
-
     detail_sections = []
     for summary, options in selections_details.items():
         detail_sections.append(
-            html.Details(
-                style={"margin-bottom": "25px"},
-                open=options.get("open", True),
-                children=[
-                    html.Summary(
-                        summary,
-                        className="webviz-inplace-vol-details-main",
-                    ),
-                ]
-                + options.get("children", []),
+            wcc.Selectors(
+                label=summary,
+                open_details=options.get("open", True),
+                children=options.get("children", []),
             )
         )
 
     return wcc.FlexBox(
         children=[
-            html.Div(
-                className="framed",
-                style={
-                    "height": "91vh",
-                    "flex": 1,
-                    "fontSize": "0.8em",
-                    "overflowY": "auto",
-                },
+            wcc.Frame(
+                style={"flex": 1, "height": "91vh"},
                 children=detail_sections,
             ),
             html.Div(

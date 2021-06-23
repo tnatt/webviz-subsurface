@@ -1,12 +1,12 @@
-from typing import Callable, Tuple, Union, Optional, Any
+from typing import Callable, Optional, Any
 
 import dash
 from dash.dependencies import Input, Output, State, ALL
 from dash.exceptions import PreventUpdate
-import dash_core_components as dcc
 import webviz_core_components as wcc
 from webviz_subsurface._models import InplaceVolumesModel
-import time
+from ..utils.utils import create_range_string, update_relevant_components
+
 
 # pylint: disable=too-many-statements, too-many-locals, too-many-arguments
 def selections_controllers(
@@ -35,7 +35,7 @@ def selections_controllers(
         previous_selection: dict,
         selector_ids: list,
         filter_ids: list,
-    ) -> Tuple[dict, str]:
+    ) -> dict:
         ctx = dash.callback_context.triggered[0]
         if ctx["prop_id"] == ".":
             raise PreventUpdate
@@ -57,7 +57,9 @@ def selections_controllers(
         page_selections.update(Colorscale=colorscale)
         page_selections.update(ctx_clicked=ctx["prop_id"])
 
-        if previous_selection.get(selected_page) is not None:
+        if previous_selection.get(selected_page) is None:
+            page_selections.update(update=True)
+        else:
             equal_list = []
             for selector, values in page_selections.items():
                 if selector != "ctx_clicked":
@@ -65,8 +67,8 @@ def selections_controllers(
                         values == previous_selection[selected_page][selector]
                     )
             page_selections.update(update=not all(equal_list))
-        previous_selection[selected_page] = page_selections
 
+        previous_selection[selected_page] = page_selections
         return previous_selection
 
     @app.callback(
@@ -109,7 +111,7 @@ def selections_controllers(
         selector_ids: list,
         previous_selection: Optional[dict],
         selected_tab: str,
-    ) -> Tuple[list, list, list]:
+    ) -> tuple:
         ctx = dash.callback_context.triggered[0]
         if (
             selected_tab != "voldist"
@@ -189,7 +191,7 @@ def selections_controllers(
         return tuple(
             update_relevant_components(
                 id_list=selector_ids,
-                data=[
+                update_info=[
                     {
                         "new_value": values.get(prop, dash.no_update),
                         "conditions": {"selector": selector},
@@ -227,9 +229,9 @@ def selections_controllers(
         reals: list,
         selector_ids: list,
         prev_selection: dict,
-        selected_tab,
-        filter_options,
-        filter_ids,
+        selected_tab: str,
+        filter_options: list,
+        filter_ids: list,
         reals_ids: list,
         real_string_ids: list,
     ) -> tuple:
@@ -297,7 +299,7 @@ def selections_controllers(
         return (
             update_relevant_components(
                 id_list=filter_ids,
-                data=[
+                update_info=[
                     {
                         "new_value": output[item].get("multi", dash.no_update),
                         "conditions": {"tab": selected_tab, "selector": item},
@@ -307,7 +309,7 @@ def selections_controllers(
             ),
             update_relevant_components(
                 id_list=filter_ids,
-                data=[
+                update_info=[
                     {
                         "new_value": output[item].get("values", dash.no_update),
                         "conditions": {"tab": selected_tab, "selector": item},
@@ -317,7 +319,7 @@ def selections_controllers(
             ),
             update_relevant_components(
                 id_list=real_string_ids,
-                data=[{"new_value": text, "conditions": {"tab": selected_tab}}],
+                update_info=[{"new_value": text, "conditions": {"tab": selected_tab}}],
             ),
         )
 
@@ -366,7 +368,7 @@ def selections_controllers(
         selected_tab: str,
         input_ids: list,
         wrapper_ids: list,
-    ) -> Union[dcc.RangeSlider, wcc.Select]:
+    ) -> list:
         reals = volumemodel.realizations
         prev_selection = (
             selections[selected_page]["filters"].get("REAL", [])
@@ -389,9 +391,9 @@ def selections_controllers(
             )
             return update_relevant_components(
                 id_list=wrapper_ids,
-                data=[
+                update_info=[
                     {
-                        "new_value": dcc.RangeSlider(
+                        "new_value": wcc.RangeSlider(
                             id={
                                 "id": get_uuid("filters"),
                                 "tab": selected_tab,
@@ -414,7 +416,7 @@ def selections_controllers(
         elements = prev_selection if prev_selection is not None else reals
         return update_relevant_components(
             id_list=wrapper_ids,
-            data=[
+            update_info=[
                 {
                     "new_value": wcc.Select(
                         id={
@@ -433,28 +435,3 @@ def selections_controllers(
                 }
             ],
         )
-
-
-def create_range_string(real_list: list) -> str:
-    idx = 0
-    ranges = [[real_list[0], real_list[0]]]
-    for real in list(real_list):
-        if ranges[idx][1] in (real, real - 1):
-            ranges[idx][1] = real
-        else:
-            ranges.append([real, real])
-            idx += 1
-
-    return ", ".join(
-        map(lambda p: "%s-%s" % tuple(p) if p[0] != p[1] else str(p[0]), ranges)
-    )
-
-
-def update_relevant_components(id_list, data):
-    output_id_list = [dash.no_update] * len(id_list)
-    for elm in data:
-        for idx, x in enumerate(id_list):
-            if all(x[key] == value for key, value in elm["conditions"].items()):
-                output_id_list[idx] = elm["new_value"]
-                break
-    return output_id_list

@@ -4,29 +4,24 @@ import webviz_core_components as wcc
 
 def tornado_main_layout(uuid: str) -> html.Div:
     return html.Div(
-        children=[
-            html.Div(
-                id={"id": uuid, "page": "tornado"},
-                style={"display": "block"},
-                children=tornado_plots_layout(uuid),
-            ),
-        ]
+        id={"id": uuid, "page": "tornado"},
+        style={"display": "block"},
+        children=tornado_plots_layout(uuid),
     )
 
 
 def tornado_plots_layout(uuid: str) -> html.Div:
     return html.Div(
         children=[
-            html.Div(
-                className="webviz-inplace-vol-framed",
+            wcc.Frame(
+                color="white",
+                highlight=False,
                 style={"height": "44vh"},
                 children=[
                     wcc.FlexBox(
                         children=[
                             html.Div(
-                                style={
-                                    "flex": 1,
-                                },
+                                style={"flex": 1},
                                 children=wcc.Graph(
                                     id={
                                         "id": uuid,
@@ -38,9 +33,7 @@ def tornado_plots_layout(uuid: str) -> html.Div:
                                 ),
                             ),
                             html.Div(
-                                style={
-                                    "flex": 1,
-                                },
+                                style={"flex": 1},
                                 children=wcc.Graph(
                                     id={
                                         "id": uuid,
@@ -55,8 +48,9 @@ def tornado_plots_layout(uuid: str) -> html.Div:
                     )
                 ],
             ),
-            html.Div(
-                className="webviz-inplace-vol-framed",
+            wcc.Frame(
+                color="white",
+                highlight=False,
                 style={"height": "44vh"},
                 children=html.Div(
                     id={"id": uuid, "wrapper": "table", "page": "tornado"},

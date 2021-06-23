@@ -11,6 +11,7 @@ def clientside_stores(get_uuid: Callable) -> html.Div:
             dcc.Store(id=get_uuid("filter-voldist"), storage_type="session"),
             dcc.Store(id=get_uuid("selections"), storage_type="session"),
             dcc.Store(id=get_uuid("page-selected"), storage_type="session"),
+            dcc.Store(id=get_uuid("voldist-page-selected"), storage_type="session"),
             dcc.Store(id=get_uuid("test"), storage_type="session"),
             html.Div(
                 style={"display": "none"},

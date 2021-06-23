@@ -1,133 +1,119 @@
-from typing import List, Optional
+from typing import Optional, Union
 import dash_html_components as html
-import dash_core_components as dcc
 import webviz_core_components as wcc
-from webviz_config import WebvizConfigTheme
 from webviz_subsurface._models import InplaceVolumesModel
 
 
 def tornado_selections_layout(
-    uuid: str, volumemodel: InplaceVolumesModel, theme: WebvizConfigTheme, tab="none"
+    uuid: str, volumemodel: InplaceVolumesModel, tab: str
 ) -> html.Div:
-    """Layout for selecting intersection data"""
+    """Layout for selecting tornado data"""
     return html.Div(
         children=[
             tornado_controls_layout(uuid, tab, volumemodel),
-            settings_layout(uuid, tab, theme, volumemodel),
+            settings_layout(uuid, tab, volumemodel),
         ]
     )
 
 
 def tornado_controls_layout(
-    uuid: str, tab, volumemodel: InplaceVolumesModel
-) -> html.Details:
+    uuid: str, tab: str, volumemodel: InplaceVolumesModel
+) -> wcc.Selectors:
 
-    return html.Details(
-        className="webviz-inplace-vol-plotselect",
-        style={"margin-top": "20px"},
-        open=True,
+    return wcc.Selectors(
+        label="TORNADO CONTROLS",
+        open_details=True,
         children=[
-            html.Summary(
-                style={"font-size": "15px", "font-weight": "bold"},
-                children="TORNADO CONTROLS",
+            create_dropdown(
+                selector="Volume response",
+                options=[x for x in ["STOIIP", "GIIP"] if x in volumemodel.responses],
+                uuid=uuid,
+                tab=tab,
+            ),
+            create_dropdown(
+                selector="Scale",
+                options=[
+                    {"label": "Relative value (%)", "value": "Percentage"},
+                    {"label": "Relative value", "value": "Absolute"},
+                    {"label": "True value", "value": "True"},
+                ],
+                uuid=uuid,
+                tab=tab,
             ),
             html.Div(
-                style={"padding": "10px"},
-                children=[
-                    create_dropdown(
-                        selector="Volume response",
-                        options=[
-                            x for x in ["STOIIP", "GIIP"] if x in volumemodel.responses
-                        ],
-                        uuid=uuid,
-                        tab=tab,
-                    ),
-                    create_dropdown(
-                        selector="Scale",
-                        options=[
-                            {"label": "Delta (%)", "value": "Percentage"},
-                            {"label": "Delta", "value": "Absolute"},
-                            {"label": "True value", "value": "True"},
-                        ],
-                        uuid=uuid,
-                        tab=tab,
-                    ),
-                    html.Div(
-                        style={"margin-top": "10px"},
-                        children=create_select(
-                            selector="Bulk sensitivities",
-                            options=volumemodel.sensitivities,
-                            uuid=uuid,
-                            tab=tab,
-                        ),
-                    ),
-                    html.Div(
-                        style={"margin-top": "10px"},
-                        children=create_select(
-                            selector="Volume sensitivities",
-                            options=volumemodel.sensitivities,
-                            uuid=uuid,
-                            tab=tab,
-                        ),
-                    ),
-                ],
+                style={"margin-top": "10px"},
+                children=create_select(
+                    selector="Bulk sensitivities",
+                    options=volumemodel.sensitivities,
+                    uuid=uuid,
+                    tab=tab,
+                ),
+            ),
+            html.Div(
+                style={"margin-top": "10px"},
+                children=create_select(
+                    selector="Volume sensitivities",
+                    options=volumemodel.sensitivities,
+                    uuid=uuid,
+                    tab=tab,
+                ),
+            ),
+            html.Div(
+                style={"margin-top": "10px"},
+                children=wcc.Checklist(
+                    id={"id": uuid, "tab": tab, "selector": "real_scatter"},
+                    options=[{"label": "Show realization points", "value": "Show"}],
+                    value=[],
+                ),
             ),
         ],
     )
 
 
 def settings_layout(
-    uuid: str, tab, theme: WebvizConfigTheme, volumemodel: InplaceVolumesModel
-) -> html.Details:
-
-    theme_colors = theme.plotly_theme.get("layout", {}).get("colorway", [])
-    return html.Details(
-        className="webviz-inplace-vol-plotselect",
-        open=False,
+    uuid: str, tab: str, volumemodel: InplaceVolumesModel
+) -> wcc.Selectors:
+    return wcc.Selectors(
+        label="⚙️ SETTINGS",
+        open_details=False,
         children=[
-            html.Summary(
-                style={"font-size": "15px", "font-weight": "bold"},
-                children="⚙️ SETTINGS",
-            ),
-            html.Div(
-                style={"padding": "10px"},
-                children=[
-                    cut_by_ref(uuid, tab),
-                    labels_display(uuid, tab),
-                    create_dropdown(
-                        selector="Reference",
-                        options=volumemodel.sensitivities,
-                        uuid=uuid,
-                        tab=tab,
-                    ),
-                ],
+            cut_by_ref(uuid, tab),
+            labels_display(uuid, tab),
+            create_dropdown(
+                selector="Reference",
+                options=volumemodel.sensitivities,
+                value="rms_seed" if "rms_seed" in volumemodel.sensitivities else None,
+                uuid=uuid,
+                tab=tab,
             ),
         ],
     )
 
 
-def create_dropdown(selector: str, options: list, uuid, tab, value=None):
+def create_dropdown(
+    selector: str,
+    options: Union[list, dict],
+    uuid: str,
+    tab: str,
+    value: Optional[str] = None,
+) -> wcc.Dropdown:
     options = (
         options
         if isinstance(options[0], dict)
         else [{"label": elm, "value": elm} for elm in options]
     )
-    return html.Div(
-        children=[
-            html.Span(selector, style={"font-weight": "bold"}),
-            dcc.Dropdown(
-                id={"id": uuid, "tab": tab, "selector": selector},
-                options=options,
-                value=value if value is not None else options[0]["value"],
-                clearable=False,
-                persistence=True,
-                persistence_type="session",
-            ),
-        ]
+    return wcc.Dropdown(
+        label=selector,
+        id={"id": uuid, "tab": tab, "selector": selector},
+        options=options,
+        value=value if value is not None else options[0]["value"],
+        clearable=False,
     )
 
 
-def create_select(selector: str, options: list, uuid, tab, value=None):
+def create_select(
+    selector: str, options: list, uuid: str, tab: str, value: Optional[list] = None
+) -> html.Details:
     return html.Details(
         open=False,
         children=[
@@ -147,34 +133,37 @@ def create_select(selector: str, options: list, uuid, tab, value=None):
                     10,
                     len(options),
                 ),
-                persistence=True,
-                persistence_type="session",
             ),
         ],
     )
 
 
-def cut_by_ref(uuid: str, tab) -> dcc.Checklist:
-    return dcc.Checklist(
-        id={"id": uuid, "tab": tab, "selector": "Remove no impact"},
-        options=[{"label": "Remove sensitivities with no impact", "value": "Remove"}],
-        value=["Remove"],
+def cut_by_ref(uuid: str, tab: str) -> html.Div:
+    return html.Div(
+        style={"margin-bottom": "10px"},
+        children=wcc.Checklist(
+            id={"id": uuid, "tab": tab, "selector": "Remove no impact"},
+            options=[
+                {"label": "Remove sensitivities with no impact", "value": "Remove"}
+            ],
+            value=["Remove"],
+        ),
     )
 
 
-def labels_display(uuid: str, tab) -> html.Div:
+def labels_display(uuid: str, tab: str) -> html.Div:
     return html.Div(
         style={"margin-bottom": "10px"},
         children=[
-            html.Span("Label options:", style={"font-weight": "bold"}),
-            dcc.RadioItems(
+            wcc.RadioItems(
+                label="Label options:",
                 id={"id": uuid, "tab": tab, "selector": "labeloptions"},
                 options=[
                     {"label": "detailed", "value": "detailed"},
                     {"label": "simple", "value": "simple"},
                     {"label": "hide", "value": "hide"},
                 ],
-                labelStyle={"display": "inline-flex", "margin-right": "5px"},
+                vertical=False,
                 value="detailed",
             ),
         ],
