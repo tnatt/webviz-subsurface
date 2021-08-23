@@ -1,16 +1,12 @@
-from typing import Callable, List, Optional
+from typing import Callable, List
 import pandas as pd
-from pandas.api.types import is_numeric_dtype
 import numpy as np
 import dash
 from dash.dependencies import Input, Output, State, ALL
 from dash.exceptions import PreventUpdate
-from dash_table.Format import Format
 import dash_html_components as html
-import dash_table
 import plotly.express as px
 import plotly.graph_objects as go
-import webviz_core_components as wcc
 from webviz_config import WebvizConfigTheme
 from webviz_subsurface._components.tornado._tornado_data import TornadoData
 from webviz_subsurface._components.tornado._tornado_bar_chart import TornadoBarChart
@@ -21,8 +17,14 @@ from webviz_subsurface._abbreviations.volume_terminology import (
     volume_unit,
 )
 from webviz_subsurface._figures import create_figure
+from ..views.src_comparison_layout import src_comp_qc_plots_layout
 from ..utils.utils import update_relevant_components
-
+from ..utils.figure_utils import fluid_annotation, add_correlation_line
+from ..utils.table_utils import (
+    make_table_wrapper_children,
+    create_table_columns,
+    create_data_table,
+)
 
 # pylint: disable=too-many-statements, too-many-locals, too-many-branches
 def distribution_controllers(
@@ -30,6 +32,7 @@ def distribution_controllers(
     get_uuid: Callable,
     volumemodel: InplaceVolumesModel,
     theme: WebvizConfigTheme,
+    disjoint_set_df=None,
 ) -> None:
     @app.callback(
         Output(
@@ -480,224 +483,198 @@ def distribution_controllers(
             ),
         )
 
+    @app.callback(
+        Output(
+            {
+                "id": get_uuid("main-src-comp"),
+                "wrapper": "table",
+                "page": "src-comp",
+            },
+            "children",
+        ),
+        Input(get_uuid("selections"), "data"),
+        Input({"id": get_uuid("main-src-comp"), "element": "display-option"}, "value"),
+        State(get_uuid("page-selected"), "data"),
+    )
+    def _update_page_src_comp(
+        selections: dict, display_option: str, page_selected: str
+    ) -> html.Div:
+        ctx = dash.callback_context.triggered[0]
 
-# pylint: disable=too-many-locals
-def make_table_wrapper_children(
-    dframe: pd.DataFrame,
-    responses: list,
-    volumemodel: InplaceVolumesModel,
-    selections: dict,
-    table_type: str,
-    view_height: float,
-    page_selected: str,
-    groups: Optional[list] = None,
-) -> html.Div:
+        if page_selected != "src-comp":
+            raise PreventUpdate
 
-    groups = groups if groups is not None else []
+        selections = selections[page_selected]
 
-    if table_type == "Statistics table":
-        statcols = ["Mean", "Stddev", "P90", "P10", "Minimum", "Maximum"]
-        groups = [x for x in groups if x != "REAL"]
-        df_groups = dframe.groupby(groups) if groups else [(None, dframe)]
+        if not "display-option" in ctx["prop_id"]:
+            if not selections["update"]:
+                raise PreventUpdate
 
-        data_properties = []
-        data_volcols = []
-        for response in responses:
-            if not is_numeric_dtype(dframe[response]):
-                continue
-            for name, df in df_groups:
-                values = df[response]
-                data = {
-                    "Response"
-                    if response in volumemodel.volume_columns
-                    else "Property": response,
-                    "Mean": values.mean(),
-                    "Stddev": values.std(),
-                    "P10": np.nanpercentile(values, 90),
-                    "P90": np.nanpercentile(values, 10),
-                    "Minimum": values.min(),
-                    "Maximum": values.max(),
-                }
-                if "FLUID_ZONE" not in groups:
-                    data.update(
-                        FLUID_ZONE=(" + ").join(selections["filters"]["FLUID_ZONE"])
-                    )
+        response = selections["Response"]
+        resp1 = f"{response} {selections['Source A']}"
+        resp2 = f"{response} {selections['Source B']}"
+        src1, src2 = selections["Source A"], selections["Source B"]
+        groupby = selections["Group by"] if selections["Group by"] is not None else []
+        diff_mode = selections["Diff mode"]
 
-                for idx, group in enumerate(groups):
-                    data[group] = (
-                        name if isinstance(name, str) == 1 else list(name)[idx]
-                    )
-                if response in volumemodel.volume_columns:
-                    data_volcols.append(data)
-                else:
-                    data_properties.append(data)
+        if src1 == src2:
+            return html.Div("Comparison between equal sources")
 
-        if data_volcols and data_properties:
-            view_height = view_height / 2
+        groups = ["REAL", "SOURCE", "ENSEMBLE"]
+        for selector in groupby:
+            if selector not in groups:
+                groups.append(selector)
 
-        return html.Div(
-            children=[
-                html.Div(
-                    style={"margin-top": "20px"},
-                    children=create_data_table(
-                        volumemodel=volumemodel,
-                        columns=create_table_columns(
-                            columns=[col]
-                            + [x for x in groups if x != "FLUID_ZONE"]
-                            + statcols
-                            + ["FLUID_ZONE"],
-                            format_columns=statcols,
-                            use_si_format=col == "Response",
-                        ),
-                        data=data,
-                        height=f"{view_height}vh",
-                        table_id={"table_id": f"{page_selected}-{col}"},
-                    ),
+        selections["filters"]["SOURCE"] = [src1, src2]
+        dframe = volumemodel.get_df(filters=selections["filters"], groups=groups)
+
+        df = (
+            dframe.loc[:, groups + [response]]
+            .pivot_table(
+                columns=["SOURCE"],
+                index=[x for x in groups if x not in ["SOURCE"]],
+            )
+            .reset_index()
+        )
+        df.columns = df.columns.map(" ".join).str.strip(" ")
+
+        df["diff"] = df[resp2] - df[resp1]
+        df["diff (%)"] = ((df[resp2] / df[resp1]) - 1) * 100
+        df = df.replace([np.inf, -np.inf], np.nan)
+
+        def compute_accepted_col(df):
+            accept_mask = (df[resp1] > selections["Ignore value"]) & (
+                df["diff (%)"].abs() < selections["Accept value"]
+            ) | (df[resp1] <= selections["Ignore value"])
+
+            df["accepted"] = "no"
+            df.loc[accept_mask, "accepted"] = "yes"
+            return df
+
+        def test(row, selectors, df_real):
+            query = " & ".join([f"{col}=='{row[col]}'" for col in selectors])
+            result = df_real.query(query)
+            return f"{str(len(result[result['accepted'] == 'no']))} / {str(len(result))}"  # * 100
+
+        df_real = compute_accepted_col(df)
+        non_accepted_count_real = len(df_real.loc[df_real["accepted"] == "no"])
+
+        selectors = [x for x in groupby if x != "REAL"]
+        df = df.groupby(["ENSEMBLE"] + selectors).mean().reset_index()
+        df = df.drop(columns="REAL")
+        df = compute_accepted_col(df)
+        non_accepted_count_group = len(df.loc[df["accepted"] == "no"])
+        df["# reals"] = df.apply(
+            lambda row: test(row, ["ENSEMBLE"] + selectors, df_real), axis=1
+        )
+
+        df = df_real if "REAL" in groupby else df
+
+        if display_option == "table":
+            selections["Table type"] = "Mean table"
+
+            if selections["Sort"]:
+                df = df.sort_values(by=[diff_mode], key=abs, ascending=False)
+
+            columns = create_table_columns(
+                columns=df.columns,
+                use_si_format=response in volumemodel.volume_columns,
+                format_columns=[col for col in df.columns if col not in groups],
+            )
+            for col in columns:
+                if "%" in col["id"]:
+                    col["format"].update(specifier=".1f")
+
+            return html.Div(
+                create_data_table(
+                    volumemodel=volumemodel,
+                    columns=columns,
+                    height="80vh",
+                    data=df.to_dict("records"),
+                    table_id={"table_id": "src-comp-table"},
+                    style_cell={"textAlign": "center"},
+                    style_data_conditional=[
+                        {
+                            "if": {"filter_query": "{accepted} = 'no'"},
+                            "color": "#FF1243",
+                            "fontWeight": "bold",
+                        },
+                    ],
+                    disjoint_set_df=disjoint_set_df,
                 )
-                for col, data in zip(
-                    ["Response", "Property"], [data_volcols, data_properties]
+            )
+
+        colorby = selections["Color by"]
+        if colorby != "accepted":
+            colorby = groupby[0] if groupby else None
+        color_map = {"no": "#FF1243", "yes": "#80B7BC"}
+
+        fig_corr, fig_diff_vs_response, fig_dif_vs_real = (
+            (
+                create_figure(
+                    plot_type="scatter",
+                    data_frame=df_plot,
+                    x=x,
+                    y=y,
+                    color_discrete_sequence=px.colors.qualitative.Dark2,
+                    color_discrete_map=color_map if colorby == "accepted" else None,
+                    color=colorby,
+                    hover_data={col: True for col in selectors},
                 )
+                .update_traces(marker_size=10)
+                .update_layout(margin={"l": 20, "r": 20, "t": 20, "b": 20})
+            )
+            for (df_plot, x, y) in [
+                (df, resp1, resp2),
+                (df, resp1, diff_mode),
+                (df_real, "REAL", diff_mode),
             ]
         )
 
-    # if table type Mean table
-    groupby_real = (
-        selections["Group by"] is not None and "REAL" in selections["Group by"]
-    )
-    if "REAL" in groups and not groupby_real:
-        groups.remove("REAL")
+        fig_corr = add_correlation_line(
+            figure=fig_corr,
+            xy_min=min(df[resp1].min(), df[resp2].min()),
+            xy_max=max(df[resp1].max(), df[resp2].max()),
+        )
 
-    columns = responses + [x for x in groups if x not in responses]
-    dframe = (
-        dframe[columns].groupby(groups).mean().reset_index()
-        if groups
-        else dframe[responses].mean().to_frame().T
-    )
+        fig_distribution = create_figure(
+            plot_type="distribution",
+            data_frame=dframe,
+            x=response,
+            color_discrete_sequence=selections["Colorscale"],
+            color="SOURCE",
+        ).update_layout(margin={"l": 75, "r": 20, "t": 20, "b": 20})
 
-    if "FLUID_ZONE" not in dframe:
-        dframe["FLUID_ZONE"] = (" + ").join(selections["filters"]["FLUID_ZONE"])
+        if diff_mode == "diff (%)":
+            fig_dif_vs_real.add_hline(
+                y=selections["Accept value"], line_dash="dot"
+            ).add_hline(y=-selections["Accept value"], line_dash="dot")
 
-    dframe = dframe[[x for x in dframe.columns if x != "FLUID_ZONE"] + ["FLUID_ZONE"]]
-    return html.Div(
-        children=[
-            create_data_table(
-                volumemodel=volumemodel,
-                columns=create_table_columns(
-                    columns=dframe.columns,
-                    format_columns=dframe.columns,
-                    volumemodel=volumemodel,
-                ),
-                data=dframe.iloc[::-1].to_dict("records"),
-                height=f"{view_height}vh",
-                table_id={"table_id": f"{page_selected}-meantable"},
-            )
-        ]
-    )
+        def find_diff_plot_range(df, diff_mode, selections):
+            if selections["Axis focus"] and "no" in df["accepted"].values:
+                data = df[df["accepted"] == "no"][diff_mode]
+            else:
+                data = df[diff_mode]
 
+            low = min(data.min(), -selections["Accept value"])
+            high = max(data.max(), selections["Accept value"])
+            extend = (high - low) * 0.1
+            return [low - extend, high + extend]
 
-def create_table_columns(
-    columns: list,
-    volumemodel: Optional[InplaceVolumesModel] = None,
-    format_columns: Optional[list] = None,
-    use_si_format: Optional[bool] = None,
-) -> List[dict]:
+        plotrange = find_diff_plot_range(df_real, diff_mode, selections)
+        fig_dif_vs_real.update_yaxes(range=plotrange)
+        if "REAL" in groupby:
+            fig_diff_vs_response.update_yaxes(range=plotrange)
 
-    format_columns = format_columns if format_columns is not None else []
-
-    table_columns = []
-    for col in columns:
-        data = {"id": col, "name": col}
-        if col in format_columns:
-            data.update(
-                {
-                    "type": "numeric",
-                    "format": {"locale": {"symbol": ["", ""]}, "specifier": "$.4s"}
-                    if use_si_format
-                    or volumemodel is not None
-                    and col in volumemodel.volume_columns
-                    else Format(precision=3),
-                }
-            )
-        table_columns.append(data)
-    return table_columns
-
-
-# pylint: disable=inconsistent-return-statements
-def create_data_table(
-    volumemodel: InplaceVolumesModel,
-    columns: list,
-    height: str,
-    data: List[dict],
-    table_id: dict,
-) -> dash_table.DataTable:
-
-    if not data:
-        return []
-
-    style_cell_conditional = [
-        {"if": {"column_id": c}, "textAlign": "left"}
-        for c in [x for x in volumemodel.selectors if x != "FLUID_ZONE"]
-        + ["Response", "Property", "Sensitivity"]
-    ]
-    style_cell_conditional.extend(
-        [
-            {"if": {"column_id": c}, "width": "10%"}
-            for c in volumemodel.selectors + ["Response", "Property", "Sensitivity"]
-        ]
-    )
-    style_data_conditional = fluid_table_style()
-
-    return wcc.WebvizPluginPlaceholder(
-        id={"request": "table_data", "table_id": table_id["table_id"]},
-        buttons=["expand", "download"],
-        children=dash_table.DataTable(
-            id=table_id,
-            sort_action="native",
-            sort_mode="multi",
-            filter_action="native",
-            columns=columns,
-            data=data,
-            style_as_list_view=True,
-            style_cell_conditional=style_cell_conditional,
-            style_data_conditional=style_data_conditional,
-            style_table={
-                "height": height,
-                "overflowY": "auto",
-            },
-        ),
-    )
-
-
-def fluid_table_style() -> list:
-    fluid_colors = {
-        "oil": "#007079",
-        "gas": "#FF1243",
-        "water": "#ADD8E6",
-    }
-    return [
-        {
-            "if": {
-                "filter_query": "{FLUID_ZONE} = " + f"'{fluid}'",
-                "column_id": "FLUID_ZONE",
-            },
-            "color": color,
-            "fontWeight": "bold",
-        }
-        for fluid, color in fluid_colors.items()
-    ]
-
-
-def fluid_annotation(selections: dict) -> dict:
-    fluid_text = (" + ").join(selections["filters"]["FLUID_ZONE"])
-    return dict(
-        visible=bool(selections["Fluid annotation"])
-        and selections["Subplots"] != "FLUID_ZONE",
-        x=1,
-        y=1,
-        xref="paper",
-        yref="paper",
-        showarrow=False,
-        text="Fluid zone<br>" + fluid_text,
-        font=dict(size=15, color="black"),
-        bgcolor="#E8E8E8",
-    )
+        return src_comp_qc_plots_layout(
+            fig_dif_vs_real,
+            fig_corr,
+            fig_diff_vs_response,
+            fig_distribution,
+            non_accepted_count_group,
+            non_accepted_count_real,
+            selectors,
+            response,
+            src1,
+            src2,
+        )

@@ -13,7 +13,11 @@ def selections_layout(
 ) -> html.Div:
     """Layout for selecting intersection data"""
     selectors = "/".join(
-        [x.lower() for x in ["ZONE", "REGION", "FACIES"] if x in volumemodel.selectors]
+        [
+            x.lower()
+            for x in ["ZONE", "REGION", "FACIES", "FIPNUM", "SET"]
+            if x in volumemodel.selectors
+        ]
     )
     return html.Div(
         children=[

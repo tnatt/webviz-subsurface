@@ -14,6 +14,8 @@ class InplaceVolumesModel:
         "SOURCE",
         "ENSEMBLE",
         "REAL",
+        "FIPNUM",
+        "SET",
         "ZONE",
         "REGION",
         "FACIES",

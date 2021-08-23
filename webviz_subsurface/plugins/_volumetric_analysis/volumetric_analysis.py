@@ -14,6 +14,7 @@ from webviz_subsurface._models import EnsembleSetModel, InplaceVolumesModel
 from webviz_subsurface._models import caching_ensemble_set_model_factory
 from webviz_subsurface._models.inplace_volumes_model import extract_volumes
 
+from .volume_combinator import VolumeCombinator
 from .views import clientside_stores, main_view
 from .controllers import (
     distribution_controllers,
@@ -100,6 +101,7 @@ aggregated_data/parameters.csv)
         ensembles: list = None,
         volfiles: dict = None,
         volfolder: str = "share/results/volumes",
+        fipfile: Path = None,
         non_net_facies: Optional[List[str]] = None,
     ):
 
@@ -151,8 +153,11 @@ aggregated_data/parameters.csv)
                 'Incorrent arguments. Either provide a "csvfile" or "ensembles" and "volfiles"'
             )
 
+        vcomb = VolumeCombinator(volumes_table=volumes_table, fipfile=fipfile)
+        self.disjoint_set_df = vcomb.disjoint_set_df
+
         self.volmodel = InplaceVolumesModel(
-            volumes_table=volumes_table,
+            volumes_table=vcomb.dframe,
             parameter_table=parameters,
             non_net_facies=non_net_facies,
         )
@@ -175,7 +180,11 @@ aggregated_data/parameters.csv)
     def set_callbacks(self, app: dash.Dash) -> None:
         selections_controllers(app=app, get_uuid=self.uuid, volumemodel=self.volmodel)
         distribution_controllers(
-            app=app, get_uuid=self.uuid, volumemodel=self.volmodel, theme=self.theme
+            app=app,
+            get_uuid=self.uuid,
+            volumemodel=self.volmodel,
+            theme=self.theme,
+            disjoint_set_df=self.disjoint_set_df,
         )
         layout_controllers(app=app, get_uuid=self.uuid)
         export_data_controllers(app=app, get_uuid=self.uuid)

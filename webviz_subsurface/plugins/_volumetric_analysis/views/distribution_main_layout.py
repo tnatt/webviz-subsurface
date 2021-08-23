@@ -114,7 +114,11 @@ def one_plot_one_table_layout(uuid: str) -> html.Div:
 def plots_per_zone_region_layout(
     uuid: str, volumemodel: InplaceVolumesModel
 ) -> html.Div:
-    selectors = [x for x in ["ZONE", "REGION", "FACIES"] if x in volumemodel.selectors]
+    selectors = [
+        x
+        for x in ["ZONE", "REGION", "FACIES", "FIPNUM", "SET"]
+        if x in volumemodel.selectors
+    ]
     height = max(88 / len(selectors), 25)
     layout = []
     for selector in selectors:

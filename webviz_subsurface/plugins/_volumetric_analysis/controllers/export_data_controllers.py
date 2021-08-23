@@ -37,6 +37,10 @@ def export_data_controllers(app: dash.Dash, get_uuid: Callable) -> None:
         table_data = table_data[index]
         table_columns = [x["name"] for x in table_columns[index]]
 
+        # if multilple header the columns are in list form
+        if isinstance(table_columns[0], list):
+            table_columns = [("|").join(col) for col in table_columns]
+
         return dcc.send_data_frame(
             pd.DataFrame(data=table_data, columns=table_columns).to_excel,
             "VolumetricAnalysis.xlsx",

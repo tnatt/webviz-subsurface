@@ -10,6 +10,7 @@ from .distribution_main_layout import distributions_main_layout, table_main_layo
 from .selections_view import selections_layout, table_selections_layout
 from .tornado_selections_view import tornado_selections_layout
 from .tornado_layout import tornado_main_layout
+from .src_comparison_layout import src_comparison_main_layout, src_comp_selections
 
 
 def main_view(
@@ -101,7 +102,7 @@ def main_view(
                                     "SENSCASE",
                                     "SENSNAME",
                                     "SENSTYPE",
-                                    "REAL",
+                                    "FLUID_ZONE",
                                 ]
                             ],
                         ),
@@ -115,19 +116,23 @@ def main_view(
                 label="Source comparison",
                 value="src-comp",
                 children=tab_view_layout(
-                    main_layout=[
-                        html.Div(
-                            "Under development - page for comparing geo/sim/eclipse "
-                            "volumes and identify differences",
-                            style={"margin": "50px", "font-size": "20px"},
+                    main_layout=src_comparison_main_layout(get_uuid("main-src-comp")),
+                    sidebar_layout=[
+                        src_comp_selections(
+                            uuid=get_uuid("selections"),
+                            tab="src-comp",
+                            volumemodel=volumemodel,
+                        )
+                    ]
+                    + [
+                        filter_layout(
+                            open_details=True,
+                            uuid=get_uuid("filters"),
+                            tab="src-comp",
+                            volumemodel=volumemodel,
+                            #   filters=[x for x in volumemodel.selectors if x != "SOURCE"],
                         )
                     ],
-                    sidebar_layout=filter_layout(
-                        open_details=True,
-                        uuid=get_uuid("filters"),
-                        tab="src-comp",
-                        volumemodel=volumemodel,
-                    ),
                 ),
             )
         )
