@@ -7,17 +7,23 @@ import fmu.tools.fipmapper.fipmapper as fipmapper
 
 class VolumeCombinator:
     def __init__(self, volumes_table: pd.DataFrame, fipfile: Path = None):
+        self.columns_per_source = {}
         self.disjoint_set_df = (
             fipmapper.FipMapper(yamlfile=fipfile).disjoint_sets() if fipfile else None
         )
         self.dframe = self.combine_sources(volumes_table)
 
+        sets = [set(x) for x in self.columns_per_source.values()]
+        self.common_columns = set.intersection(*sets)
+
+    #     self.columns_per_source =
     def combine_sources(self, volumes_table) -> pd.DataFrame:
         dfs = []
         all_columns = set()
-        for _, data in volumes_table.groupby("SOURCE"):
+        for src, data in volumes_table.groupby("SOURCE"):
             data = data.dropna(axis=1, how="all")
             all_columns.update(data.columns)
+            self.columns_per_source[src] = data.columns
             dfs.append(data)
 
         if self.disjoint_set_df is not None:

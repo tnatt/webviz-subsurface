@@ -10,7 +10,7 @@ def filter_layout(
     tab: str,
     volumemodel: InplaceVolumesModel,
     open_details: bool = True,
-    filters: Optional[list] = None,
+    hide_selectors: Optional[list] = None,
 ) -> wcc.Selectors:
     """Layout for selecting intersection data"""
     return wcc.Selectors(
@@ -18,7 +18,10 @@ def filter_layout(
         open_details=open_details,
         children=[
             filter_dropdowns(
-                uuid=uuid, tab=tab, volumemodel=volumemodel, filters=filters
+                uuid=uuid,
+                tab=tab,
+                volumemodel=volumemodel,
+                hide_selectors=hide_selectors,
             ),
             realization_filters(uuid=uuid, tab=tab, volumemodel=volumemodel),
         ],
@@ -29,19 +32,24 @@ def filter_dropdowns(
     uuid: str,
     volumemodel: InplaceVolumesModel,
     tab: str,
-    filters: Optional[list] = None,
+    hide_selectors: Optional[list] = None,
 ) -> html.Div:
     """Makes dropdowns for each selector"""
     dropdowns: List[html.Div] = []
-    filters = filters if filters is not None else volumemodel.selectors
-    for selector in filters:
+
+    hide_selectors = hide_selectors if hide_selectors is not None else []
+    for selector in volumemodel.selectors:
         if selector == "REAL":
             continue
         elements = list(volumemodel.dataframe[selector].unique())
 
         dropdowns.append(
             html.Div(
-                style={"display": "inline" if len(elements) > 1 else "none"},
+                style={
+                    "display": "inline"
+                    if len(elements) > 1 and selector not in hide_selectors
+                    else "none"
+                },
                 children=wcc.SelectWithLabel(
                     label=selector.lower().capitalize(),
                     id={"id": uuid, "tab": tab, "selector": selector},

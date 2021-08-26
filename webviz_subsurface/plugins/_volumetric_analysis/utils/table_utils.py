@@ -172,8 +172,14 @@ def create_data_table(
 
     if style_cell_conditional is None:
         style_cell_conditional = [
-            {"if": {"column_id": c}, "width": "10%", "textAlign": "left"}
-            for c in volumemodel.selectors + ["Response", "Property", "Sensitivity"]
+            {
+                "if": {
+                    "column_id": volumemodel.selectors
+                    + ["Response", "Property", "Sensitivity"]
+                },
+                "width": "10%",
+                "textAlign": "left",
+            }
         ]
         style_cell_conditional.extend(
             [{"if": {"column_id": "FLUID_ZONE"}, "textAlign": "right"}]
@@ -210,7 +216,7 @@ def create_data_table(
 
 
 def tooltip_for_sets(disjoint_set_df, data):
-    if disjoint_set_df is None:
+    if disjoint_set_df is None or "SET" not in data[0]:
         return None
 
     set_fipnums = {}
@@ -224,8 +230,8 @@ def tooltip_for_sets(disjoint_set_df, data):
             "SET": {
                 "value": "**Set {}** \n\n**Fipnums:** {} \n\n**Regzones:** {}".format(
                     row["SET"],
-                    " ".join(set_fipnums[row["SET"]]),
-                    " ".join(set_regzones[row["SET"]]),
+                    ", ".join(set_fipnums[row["SET"]]),
+                    ", ".join(set_regzones[row["SET"]]),
                 ),
                 "type": "markdown",
             }

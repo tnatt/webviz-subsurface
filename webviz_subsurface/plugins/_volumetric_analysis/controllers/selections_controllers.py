@@ -247,6 +247,9 @@ def selections_controllers(
         real_string_ids: list,
     ) -> tuple:
 
+        if _selected_page == "setinfo":
+            raise PreventUpdate
+
         page_selections = {
             id_value["selector"]: values
             for id_value, values in zip(selector_ids, selectors)

@@ -538,6 +538,8 @@ def distribution_controllers(
         )
         df.columns = df.columns.map(" ".join).str.strip(" ")
 
+        # todo -  rearrange cols for resp1 og resp2
+
         df["diff"] = df[resp2] - df[resp1]
         df["diff (%)"] = ((df[resp2] / df[resp1]) - 1) * 100
         df = df.replace([np.inf, -np.inf], np.nan)
@@ -551,19 +553,22 @@ def distribution_controllers(
             df.loc[accept_mask, "accepted"] = "yes"
             return df
 
+        def count_not_accepted(df):
+            return len(df[df["accepted"] == "no"])
+
         def test(row, selectors, df_real):
             query = " & ".join([f"{col}=='{row[col]}'" for col in selectors])
             result = df_real.query(query)
-            return f"{str(len(result[result['accepted'] == 'no']))} / {str(len(result))}"  # * 100
+            return f"{str(count_not_accepted(result))} / {str(len(result))}"  # * 100
 
         df_real = compute_accepted_col(df)
-        non_accepted_count_real = len(df_real.loc[df_real["accepted"] == "no"])
+        non_accepted_count_real = count_not_accepted(df_real)
 
         selectors = [x for x in groupby if x != "REAL"]
         df = df.groupby(["ENSEMBLE"] + selectors).mean().reset_index()
         df = df.drop(columns="REAL")
         df = compute_accepted_col(df)
-        non_accepted_count_group = len(df.loc[df["accepted"] == "no"])
+        non_accepted_count_group = count_not_accepted(df)
         df["# reals"] = df.apply(
             lambda row: test(row, ["ENSEMBLE"] + selectors, df_real), axis=1
         )
@@ -663,8 +668,7 @@ def distribution_controllers(
 
         plotrange = find_diff_plot_range(df_real, diff_mode, selections)
         fig_dif_vs_real.update_yaxes(range=plotrange)
-        if "REAL" in groupby:
-            fig_diff_vs_response.update_yaxes(range=plotrange)
+        fig_diff_vs_response.update_yaxes(range=plotrange)
 
         return src_comp_qc_plots_layout(
             fig_dif_vs_real,

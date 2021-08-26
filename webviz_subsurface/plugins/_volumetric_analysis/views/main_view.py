@@ -1,5 +1,5 @@
 from typing import Callable
-
+import pandas as pd
 import dash_html_components as html
 import dash_core_components as dcc
 import webviz_core_components as wcc
@@ -11,12 +11,14 @@ from .selections_view import selections_layout, table_selections_layout
 from .tornado_selections_view import tornado_selections_layout
 from .tornado_layout import tornado_main_layout
 from .src_comparison_layout import src_comparison_main_layout, src_comp_selections
+from .set_layout import set_filter_layout, set_main_layout, set_selections_layout
 
 
 def main_view(
     get_uuid: Callable,
     volumemodel: InplaceVolumesModel,
     theme: WebvizConfigTheme,
+    disjoint_set_df: pd.DataFrame = None,
 ) -> dcc.Tabs:
 
     tabs = [
@@ -33,15 +35,13 @@ def main_view(
                         tab="voldist",
                         volumemodel=volumemodel,
                         theme=theme,
-                    )
-                ]
-                + [
+                    ),
                     filter_layout(
                         uuid=get_uuid("filters"),
                         tab="voldist",
                         volumemodel=volumemodel,
-                        filters=[x for x in volumemodel.selectors if x != "SENSTYPE"],
-                    )
+                        hide_selectors=["SENSTYPE"],
+                    ),
                 ],
             ),
         )
@@ -59,9 +59,7 @@ def main_view(
                         uuid=get_uuid("selections"),
                         tab="table",
                         volumemodel=volumemodel,
-                    )
-                ]
-                + [
+                    ),
                     filter_layout(
                         open_details=True,
                         uuid=get_uuid("filters"),
@@ -86,24 +84,16 @@ def main_view(
                             uuid=get_uuid("selections"),
                             tab="tornado",
                             volumemodel=volumemodel,
-                        )
-                    ]
-                    + [
+                        ),
                         filter_layout(
                             open_details=True,
                             uuid=get_uuid("filters"),
                             tab="tornado",
                             volumemodel=volumemodel,
-                            filters=[
-                                x
-                                for x in volumemodel.selectors
-                                if x
-                                not in [
-                                    "SENSCASE",
-                                    "SENSNAME",
-                                    "SENSTYPE",
-                                    "FLUID_ZONE",
-                                ]
+                            hide_selectors=[
+                                "SENSCASE",
+                                "SENSNAME",
+                                "SENSTYPE",
                             ],
                         ),
                     ],
@@ -130,7 +120,7 @@ def main_view(
                             uuid=get_uuid("filters"),
                             tab="src-comp",
                             volumemodel=volumemodel,
-                            #   filters=[x for x in volumemodel.selectors if x != "SOURCE"],
+                            hide_selectors=["SOURCE"],
                         )
                     ],
                 ),
@@ -155,6 +145,26 @@ def main_view(
                         tab="ens-comp",
                         volumemodel=volumemodel,
                     ),
+                ),
+            )
+        )
+    if disjoint_set_df is not None:
+        tabs.append(
+            wcc.Tab(
+                label="Set info",
+                value="setinfo",
+                children=tab_view_layout(
+                    main_layout=set_main_layout(uuid=get_uuid("main-setinfo")),
+                    sidebar_layout=[
+                        set_selections_layout(
+                            uuid=get_uuid("selections"), tab="setinfo"
+                        ),
+                        set_filter_layout(
+                            uuid=get_uuid("filters"),
+                            tab="setinfo",
+                            disjoint_set_df=disjoint_set_df,
+                        ),
+                    ],
                 ),
             )
         )

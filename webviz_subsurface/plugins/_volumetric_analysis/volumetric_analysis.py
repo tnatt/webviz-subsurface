@@ -21,6 +21,7 @@ from .controllers import (
     selections_controllers,
     layout_controllers,
     export_data_controllers,
+    set_info_controller,
 )
 
 
@@ -173,6 +174,7 @@ aggregated_data/parameters.csv)
                     get_uuid=self.uuid,
                     volumemodel=self.volmodel,
                     theme=self.theme,
+                    disjoint_set_df=self.disjoint_set_df,
                 ),
             ],
         )
@@ -188,6 +190,12 @@ aggregated_data/parameters.csv)
         )
         layout_controllers(app=app, get_uuid=self.uuid)
         export_data_controllers(app=app, get_uuid=self.uuid)
+        set_info_controller(
+            app=app,
+            get_uuid=self.uuid,
+            volumemodel=self.volmodel,
+            disjoint_set_df=self.disjoint_set_df,
+        )
 
     def add_webvizstore(self) -> List[Tuple[Callable, list]]:
         if self.csvfile_vol is not None:
