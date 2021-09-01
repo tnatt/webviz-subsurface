@@ -16,7 +16,6 @@ class VolumeCombinator:
         sets = [set(x) for x in self.columns_per_source.values()]
         self.common_columns = set.intersection(*sets)
 
-    #     self.columns_per_source =
     def combine_sources(self, volumes_table) -> pd.DataFrame:
         dfs = []
         all_columns = set()
@@ -45,6 +44,8 @@ class VolumeCombinator:
         self, disjoint_sets_df: pd.DataFrame, volume_dfs: List[pd.DataFrame]
     ) -> pd.DataFrame:
         """Sum Eclipse and RMS volumetrics over the common disjoints sets."""
+
+        region_selectors = find_region_selectors(disjoint_sets_df)
         set_data_list = []
         for set_idx, df in disjoint_sets_df.groupby(["SET"]):
             for voldf in volume_dfs:
@@ -61,14 +62,26 @@ class VolumeCombinator:
                         f"Fipfile is provided but volumetric source {source} is missing "
                         "ZONE/REGION or FIPNUM definition."
                     )
+
                 set_df = (
                     filtered_df.groupby(["ENSEMBLE", "REAL"])
                     .sum()
                     .reset_index()
                     .drop(labels=["FIPNUM", "REGION", "ZONE"], errors="ignore")
                 )
-                set_df["SET"] = str(set_idx)
+                for col in region_selectors:
+                    set_df[col] = df[col].iloc[0] if col != "SET" else set_idx
                 set_df["SOURCE"] = source
                 set_data_list.append(set_df)
 
         return pd.concat(set_data_list, join="inner", ignore_index=True)
+
+
+def find_region_selectors(disjoint_sets_df):
+    """Return region selectors that has a unique value
+    per set. If none is found SET is used"""
+    df = disjoint_sets_df.groupby(["SET"]).nunique()
+    regcols = ["FIPNUM", "REGION", "ZONE"]
+    if any((df[x] == 1).all() for x in regcols):
+        return [x for x in regcols if (df[x] == 1).all()]
+    return ["SET"]

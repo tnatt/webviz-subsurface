@@ -1,6 +1,6 @@
 from typing import Callable
 import dash
-from dash.dependencies import Input, Output, State, ALL
+from dash.dependencies import Input, Output
 from dash.exceptions import PreventUpdate
 import dash_html_components as html
 import plotly.express as px

@@ -65,6 +65,7 @@ def main_view(
                         uuid=get_uuid("filters"),
                         tab="table",
                         volumemodel=volumemodel,
+                        hide_selectors=["SENSTYPE"],
                     ),
                 ],
             ),
@@ -120,7 +121,7 @@ def main_view(
                             uuid=get_uuid("filters"),
                             tab="src-comp",
                             volumemodel=volumemodel,
-                            hide_selectors=["SOURCE"],
+                            hide_selectors=["SOURCE", "SENSTYPE"],
                         )
                     ],
                 ),
@@ -151,7 +152,7 @@ def main_view(
     if disjoint_set_df is not None:
         tabs.append(
             wcc.Tab(
-                label="Set info",
+                label="FIPNUM mapping QC",
                 value="setinfo",
                 children=tab_view_layout(
                     main_layout=set_main_layout(uuid=get_uuid("main-setinfo")),

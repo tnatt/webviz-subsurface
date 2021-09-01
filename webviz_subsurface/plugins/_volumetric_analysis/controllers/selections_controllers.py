@@ -16,6 +16,7 @@ def selections_controllers(
         Output(get_uuid("selections"), "data"),
         Input({"id": get_uuid("selections"), "tab": ALL, "selector": ALL}, "value"),
         Input({"id": get_uuid("filters"), "tab": ALL, "selector": ALL}, "value"),
+        Input({"id": get_uuid("filters"), "tab": ALL, "regselector": ALL}, "value"),
         Input(
             {"id": get_uuid("selections"), "tab": "voldist", "settings": "Colorscale"},
             "colorscale",
@@ -26,10 +27,12 @@ def selections_controllers(
         State(get_uuid("initial-load-info"), "data"),
         State({"id": get_uuid("selections"), "tab": ALL, "selector": ALL}, "id"),
         State({"id": get_uuid("filters"), "tab": ALL, "selector": ALL}, "id"),
+        State({"id": get_uuid("filters"), "tab": ALL, "regselector": ALL}, "id"),
     )
     def _update_selections(
         selectors: list,
         filters: list,
+        regfilters: list,
         colorscale: str,
         selected_page: str,
         selected_tab: str,
@@ -37,10 +40,9 @@ def selections_controllers(
         initial_load: dict,
         selector_ids: list,
         filter_ids: list,
+        regfilter_ids: list,
     ) -> dict:
         ctx = dash.callback_context.triggered[0]
-        if ctx["prop_id"] == ".":
-            raise PreventUpdate
 
         if previous_selection is None:
             previous_selection = {}
@@ -55,10 +57,17 @@ def selections_controllers(
             for id_value, values in zip(filter_ids, filters)
             if id_value["tab"] == selected_tab
         }
+        page_selections["filters"].update(
+            {
+                id_value["regselector"]: values
+                for id_value, values in zip(regfilter_ids, regfilters)
+                if id_value["tab"] == selected_tab
+            }
+        )
 
         page_selections.update(Colorscale=colorscale)
         page_selections.update(ctx_clicked=ctx["prop_id"])
-
+        
         # check if a page needs to be updated due to page refresh or
         # change in selections/filters
         if initial_load[selected_page]:
@@ -80,7 +89,11 @@ def selections_controllers(
         Input(get_uuid("page-selected"), "data"),
         State(get_uuid("initial-load-info"), "data"),
     )
+<<<<<<< HEAD
     def _store_initial_load_info(page_selected: str, initial_load: dict) -> dict:
+=======
+    def _store_page_refresh_info(page_selected: str, initial_load: dict) -> dict:
+>>>>>>> tjhfjk
         if initial_load is None:
             initial_load = {}
         initial_load[page_selected] = page_selected not in initial_load
@@ -128,6 +141,7 @@ def selections_controllers(
         selected_tab: str,
     ) -> tuple:
         ctx = dash.callback_context.triggered[0]
+
         if (
             selected_tab != "voldist"
             or ("Color by" in ctx["prop_id"] and plot_type not in ["box", "bar"])
@@ -493,4 +507,83 @@ def selections_controllers(
                 ],
             )
             for prop in ["options", "value", "disabled"]
+        )
+
+    @app.callback(
+        Output({"id": get_uuid("filters"), "tab": ALL, "regselector": ALL}, "value"),
+        Output({"id": get_uuid("filters"), "filterwrapper": ALL, "tab": ALL}, "style"),
+        Input(
+            {"id": get_uuid("filters"), "tab": ALL, "element": "region-selector"},
+            "value",
+        ),
+        State({"id": get_uuid("filters"), "tab": ALL, "regselector": ALL}, "id"),
+        State(get_uuid("tabs"), "value"),
+        State(get_uuid("page-selected"), "data"),
+        State(get_uuid("selections"), "data"),
+        State({"id": get_uuid("filters"), "filterwrapper": ALL, "tab": ALL}, "id"),
+        State(
+            {"id": get_uuid("filters"), "tab": ALL, "element": "region-selector"},
+            "id",
+        ),
+        prevent_initial_call=True,
+    )
+    def update_region_filter(
+        mode: str,
+        ids,
+        selected_tab,
+        selected_page,
+        selections,
+        wrapper_ids,
+        reg_select_ids,
+    ) -> tuple:
+
+        page_value = [
+            value
+            for id_value, value in zip(reg_select_ids, mode)
+            if id_value["tab"] == selected_tab
+        ]
+
+        df = volumemodel.dataframe
+        filters = selections[selected_page]["filters"]
+
+        values = {}
+        if page_value[0] != "fipnum":
+            values["FIPNUM"] = df["FIPNUM"].unique()
+            for elm in ["REGION", "ZONE"]:
+                values[elm] = df.loc[df["FIPNUM"].isin(filters["FIPNUM"])][elm].unique()
+
+        else:
+            values["REGION"] = df["REGION"].unique()
+            values["ZONE"] = df["ZONE"].unique()
+            mask = (df["REGION"].isin(filters["REGION"])) & (
+                df["ZONE"].isin(filters["ZONE"])
+            )
+            values["FIPNUM"] = df.loc[mask]["FIPNUM"].unique()
+
+        styles = {}
+        styles["FIPNUM"] = {"display": "none" if page_value[0] != "fipnum" else "block"}
+        styles["REGION"] = {"display": "none" if page_value[0] == "fipnum" else "block"}
+        styles["ZONE"] = {"display": "none" if page_value[0] == "fipnum" else "block"}
+
+        return (
+            update_relevant_components(
+                id_list=ids,
+                update_info=[
+                    {
+                        "new_value": value,
+                        "conditions": {"regselector": selector, "tab": selected_tab},
+                    }
+                    for selector, value in values.items()
+                ],
+            ),
+            update_relevant_components(
+                id_list=wrapper_ids,
+                update_info=[
+                    {
+                        "new_value": style,
+                        "conditions": {"filterwrapper": selector, "tab": selected_tab},
+                    }
+                    for selector, style in styles.items()
+                ],
+            ),
         )

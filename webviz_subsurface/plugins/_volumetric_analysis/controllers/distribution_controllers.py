@@ -62,6 +62,7 @@ def distribution_controllers(
             raise PreventUpdate
 
         selections = selections[page_selected]
+        print(selections["update"])
         if not selections["update"]:
             raise PreventUpdate
 
@@ -505,7 +506,6 @@ def distribution_controllers(
             raise PreventUpdate
 
         selections = selections[page_selected]
-
         if not "display-option" in ctx["prop_id"]:
             if not selections["update"]:
                 raise PreventUpdate
@@ -587,7 +587,7 @@ def distribution_controllers(
                 format_columns=[col for col in df.columns if col not in groups],
             )
             for col in columns:
-                if "%" in col["id"]:
+                if "%" in col["id"] and isinstance(col["format"], dict):
                     col["format"].update(specifier=".1f")
 
             return html.Div(

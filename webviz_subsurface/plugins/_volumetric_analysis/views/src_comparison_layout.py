@@ -106,7 +106,7 @@ def src_comp_qc_plots_layout(
                                     f"Groups outside acceptance criteria: {non_accepted_count_group}"
                                 ),
                                 html.Div(
-                                    f"Realizations outside acceptance criteria: {non_accepted_count_real}"
+                                    f"Data points outside acceptance criteria: {non_accepted_count_real}"
                                 ),
                                 html.Div("See table for more details"),
                             ],
@@ -261,7 +261,7 @@ def response_selector(
                 "selector": "Response",
             },
             label="Response",
-            options=[{"label": i, "value": i} for i in volumemodel.volume_columns],
+            options=[{"label": i, "value": i} for i in volumemodel.responses],
             value=volumemodel.volume_columns[0],
         ),
     )

@@ -13,6 +13,9 @@ def filter_layout(
     hide_selectors: Optional[list] = None,
 ) -> wcc.Selectors:
     """Layout for selecting intersection data"""
+    reg_selectors = [
+        x for x in volumemodel.selectors if x in ["FIPNUM", "ZONE", "REGION"]
+    ]
     return wcc.Selectors(
         label="FILTERS",
         open_details=open_details,
@@ -22,6 +25,10 @@ def filter_layout(
                 tab=tab,
                 volumemodel=volumemodel,
                 hide_selectors=hide_selectors,
+                reg_selectors=reg_selectors,
+            ),
+            region_filters(
+                uuid=uuid, tab=tab, volumemodel=volumemodel, reg_selectors=reg_selectors
             ),
             realization_filters(uuid=uuid, tab=tab, volumemodel=volumemodel),
         ],
@@ -32,6 +39,7 @@ def filter_dropdowns(
     uuid: str,
     volumemodel: InplaceVolumesModel,
     tab: str,
+    reg_selectors: list,
     hide_selectors: Optional[list] = None,
 ) -> html.Div:
     """Makes dropdowns for each selector"""
@@ -39,10 +47,10 @@ def filter_dropdowns(
 
     hide_selectors = hide_selectors if hide_selectors is not None else []
     for selector in volumemodel.selectors:
-        if selector == "REAL":
+        if selector in reg_selectors + ["REAL"]:
             continue
-        elements = list(volumemodel.dataframe[selector].unique())
 
+        elements = list(volumemodel.dataframe[selector].unique())
         dropdowns.append(
             html.Div(
                 style={
@@ -61,6 +69,46 @@ def filter_dropdowns(
             )
         )
     return html.Div(dropdowns)
+
+
+def region_filters(
+    uuid: str, tab: str, volumemodel: InplaceVolumesModel, reg_selectors
+):
+
+    children: List[html.Div] = []
+    children.append(html.Span("Region filters: ", style={"font-weight": "bold"}))
+
+    if all(x in volumemodel.selectors for x in ["FIPNUM", "ZONE", "REGION"]):
+        children.append(
+            wcc.RadioItems(
+                id={"id": uuid, "tab": tab, "element": "region-selector"},
+                options=[
+                    {"label": "Region∕Zone", "value": "regzone"},
+                    {"label": "Fipnum", "value": "fipnum"},
+                ],
+                value="regzone",
+                vertical=False,
+            )
+        )
+
+    for selector in reg_selectors:
+        display = "none" if selector == "FIPNUM" and len(reg_selectors) > 1 else "block"
+        elements = sorted(list(volumemodel.dataframe[selector].unique()))
+        children.append(
+            html.Div(
+                id={"id": uuid, "filterwrapper": selector, "tab": tab},
+                style={"display": display},
+                children=wcc.SelectWithLabel(
+                    label=selector.lower().capitalize(),
+                    id={"id": uuid, "tab": tab, "regselector": selector},
+                    options=[{"label": i, "value": i} for i in elements],
+                    value=elements,
+                    multi=True,
+                    size=min(15, len(elements)),
+                ),
+            )
+        )
+    return html.Div(style={"margin-top": "15px"}, children=children)
 
 
 def realization_filters(
