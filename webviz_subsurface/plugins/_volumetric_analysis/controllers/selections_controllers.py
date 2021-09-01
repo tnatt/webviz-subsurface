@@ -67,7 +67,7 @@ def selections_controllers(
 
         page_selections.update(Colorscale=colorscale)
         page_selections.update(ctx_clicked=ctx["prop_id"])
-        
+
         # check if a page needs to be updated due to page refresh or
         # change in selections/filters
         if initial_load[selected_page]:
@@ -89,11 +89,7 @@ def selections_controllers(
         Input(get_uuid("page-selected"), "data"),
         State(get_uuid("initial-load-info"), "data"),
     )
-<<<<<<< HEAD
     def _store_initial_load_info(page_selected: str, initial_load: dict) -> dict:
-=======
-    def _store_page_refresh_info(page_selected: str, initial_load: dict) -> dict:
->>>>>>> tjhfjk
         if initial_load is None:
             initial_load = {}
         initial_load[page_selected] = page_selected not in initial_load
