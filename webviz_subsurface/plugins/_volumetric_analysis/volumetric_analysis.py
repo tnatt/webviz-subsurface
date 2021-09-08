@@ -22,6 +22,7 @@ from .controllers import (
     layout_controllers,
     export_data_controllers,
     set_info_controller,
+    comparison_controllers,
 )
 
 
@@ -101,6 +102,7 @@ aggregated_data/parameters.csv)
         csvfile_parameters: Path = None,
         ensembles: list = None,
         volfiles: dict = None,
+        volfiles_dynamic: dict = None,
         volfolder: str = "share/results/volumes",
         fipfile: Path = None,
         non_net_facies: Optional[List[str]] = None,
@@ -123,8 +125,6 @@ aggregated_data/parameters.csv)
 
         self.csvfile_vol = csvfile_vol
         self.csvfile_parameters = csvfile_parameters
-        self.volfiles = volfiles
-        self.volfolder = volfolder
 
         if csvfile_vol and ensembles:
             raise ValueError(
@@ -136,7 +136,7 @@ aggregated_data/parameters.csv)
                 read_csv(csvfile_parameters) if csvfile_parameters else None
             )
 
-        elif ensembles and volfiles:
+        elif ensembles and (volfiles or volfiles_dynamic):
             ensemble_paths = {
                 ens: webviz_settings.shared_settings["scratch_ensembles"][ens]
                 for ens in ensembles
@@ -147,6 +147,16 @@ aggregated_data/parameters.csv)
                 )
             )
             parameters = self.emodel.load_parameters()
+
+            self.mode = "static"
+            if volfiles_dynamic is not None:
+                self.mode = "dynamic"
+                if volfiles is not None:
+                    self.mode = "mix"
+                    volfiles.update(volfiles_dynamic)
+                else:
+                    volfiles = volfiles_dynamic
+
             volumes_table = extract_volumes(self.emodel, volfolder, volfiles)
 
         else:
@@ -161,6 +171,7 @@ aggregated_data/parameters.csv)
             volumes_table=vcomb.dframe,
             parameter_table=parameters,
             non_net_facies=non_net_facies,
+            data_processing=self.mode != "dynamic",
         )
         self.theme = webviz_settings.theme
         self.set_callbacks(app)
@@ -174,6 +185,7 @@ aggregated_data/parameters.csv)
                     get_uuid=self.uuid,
                     volumemodel=self.volmodel,
                     theme=self.theme,
+                    mode=self.mode,
                     disjoint_set_df=self.disjoint_set_df,
                 ),
             ],
@@ -186,6 +198,11 @@ aggregated_data/parameters.csv)
             get_uuid=self.uuid,
             volumemodel=self.volmodel,
             theme=self.theme,
+        )
+        comparison_controllers(
+            app=app,
+            get_uuid=self.uuid,
+            volumemodel=self.volmodel,
             disjoint_set_df=self.disjoint_set_df,
         )
         layout_controllers(app=app, get_uuid=self.uuid)
@@ -193,7 +210,6 @@ aggregated_data/parameters.csv)
         set_info_controller(
             app=app,
             get_uuid=self.uuid,
-            volumemodel=self.volmodel,
             disjoint_set_df=self.disjoint_set_df,
         )
 

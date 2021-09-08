@@ -3,3 +3,4 @@ from .selections_controllers import selections_controllers
 from .layout_controllers import layout_controllers
 from .export_data_controllers import export_data_controllers
 from .set_info_controller import set_info_controller
+from .comparison_controllers import comparison_controllers

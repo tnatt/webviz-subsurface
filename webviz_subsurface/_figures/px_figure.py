@@ -65,42 +65,50 @@ def make_initial_figure(plot_type: str, **plotargs: Any) -> Callable:
 def update_xaxes(figure: go.Figure, plot_type: str, **kwargs: Any) -> go.Figure:
     data_frame = kwargs["data_frame"]
     facet_col = kwargs.get("facet_col")
-    return figure.update_xaxes(
-        gridwidth=1,
-        gridcolor="lightgrey",
-        showline=True,
-        linewidth=2,
-        linecolor="black",
-        mirror=True,
-        title=None if facet_col is not None else str(kwargs.get("x")),
-        showticklabels=(data_frame[facet_col].nunique() <= 100)
-        if facet_col is not None
-        else None,
-        tickangle=0,
-        tickfont_size=max((20 - (0.4 * data_frame[facet_col].nunique())), 10)
-        if facet_col is not None
-        else None,
-        fixedrange=plot_type == "distribution",
-    ).update_xaxes(**kwargs.get("xaxis", {}))
+
+    return (
+        figure.update_xaxes(**plot_grid_definition())
+        .update_xaxes(
+            title=None if facet_col is not None else str(kwargs.get("x")),
+            showticklabels=(data_frame[facet_col].nunique() <= 100)
+            if facet_col is not None
+            else None,
+            tickangle=0,
+            tickfont_size=max((20 - (0.4 * data_frame[facet_col].nunique())), 10)
+            if facet_col is not None
+            else None,
+            fixedrange=plot_type == "distribution",
+        )
+        .update_xaxes(**kwargs.get("xaxis", {}))
+    )
 
 
 def update_yaxes(figure: go.Figure, plot_type: str, **kwargs: Any) -> go.Figure:
-    return figure.update_yaxes(
-        showline=True,
-        linewidth=2,
-        linecolor="black",
-        mirror=True,
-        gridwidth=1,
-        gridcolor="lightgrey",
-        fixedrange=plot_type == "distribution",
-        showticklabels=plot_type != "distribution",
-    ).update_yaxes(**kwargs.get("yaxis", {}))
+    return (
+        figure.update_yaxes(**plot_grid_definition())
+        .update_yaxes(
+            fixedrange=plot_type == "distribution",
+            showticklabels=plot_type != "distribution",
+        )
+        .update_yaxes(**kwargs.get("yaxis", {}))
+    )
 
 
 def update_layout(figure: go.Figure, **kwargs: Any) -> go.Figure:
     return figure.update_layout(plot_bgcolor="white", bargap=0).update_layout(
         **kwargs.get("layout", {})
     )
+
+
+def plot_grid_definition():
+    return {
+        "gridwidth": 1,
+        "gridcolor": "lightgrey",
+        "showline": True,
+        "linewidth": 2,
+        "linecolor": "black",
+        "mirror": True,
+    }
 
 
 # pylint: disable=unnecessary-lambda
@@ -164,8 +172,8 @@ def for_each_annotation(figure: go.Figure, **kwargs: Any) -> go.Figure:
 def empty_figure_layout() -> go.Figure:
     return go.Figure(
         layout=dict(
-            xaxis={"visible": False},
-            yaxis={"visible": False},
+            xaxis=plot_grid_definition(),
+            yaxis=plot_grid_definition(),
             plot_bgcolor="white",
             annotations=[
                 dict(

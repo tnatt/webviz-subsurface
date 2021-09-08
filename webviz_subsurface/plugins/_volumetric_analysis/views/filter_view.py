@@ -93,7 +93,9 @@ def region_filters(
 
     for selector in reg_selectors:
         display = "none" if selector == "FIPNUM" and len(reg_selectors) > 1 else "block"
-        elements = sorted(list(volumemodel.dataframe[selector].unique()))
+        elements = list(volumemodel.dataframe[selector].unique())
+        if selector == "FIPNUM":
+            elements = sorted(elements)
         children.append(
             html.Div(
                 id={"id": uuid, "filterwrapper": selector, "tab": tab},

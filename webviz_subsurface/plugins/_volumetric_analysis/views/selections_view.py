@@ -10,6 +10,7 @@ def selections_layout(
     volumemodel: InplaceVolumesModel,
     theme: WebvizConfigTheme,
     tab: str,
+    mode: str,
 ) -> html.Div:
     """Layout for selecting intersection data"""
     selectors = "/".join(
@@ -33,7 +34,7 @@ def selections_layout(
                 ],
             ),
             plot_selections_layout(uuid, volumemodel, tab),
-            settings_layout(uuid, theme, tab),
+            settings_layout(uuid, theme, tab, mode),
         ]
     )
 
@@ -149,14 +150,16 @@ def plot_selector_dropdowns(
     return dropdowns
 
 
-def settings_layout(uuid: str, theme: WebvizConfigTheme, tab: str) -> wcc.Selectors:
+def settings_layout(
+    uuid: str, theme: WebvizConfigTheme, tab: str, mode
+) -> wcc.Selectors:
 
     theme_colors = theme.plotly_theme.get("layout", {}).get("colorway", [])
     return wcc.Selectors(
         label="⚙️ SETTINGS",
         open_details=False,
         children=[
-            remove_fluid_annotation(uuid=uuid, tab=tab),
+            remove_fluid_annotation(uuid=uuid, tab=tab, mode=mode),
             subplot_xaxis_range(uuid=uuid, tab=tab),
             histogram_options(uuid=uuid, tab=tab),
             html.Span("Colors", style={"font-weight": "bold"}),
@@ -201,13 +204,16 @@ def table_sync_option(uuid: str, tab: str) -> html.Div:
     )
 
 
-def remove_fluid_annotation(uuid: str, tab: str) -> html.Div:
+def remove_fluid_annotation(uuid: str, tab: str, mode) -> html.Div:
     return html.Div(
-        style={"margin-bottom": "10px"},
+        style={
+            "margin-bottom": "10px",
+            "display": "none" if mode == "dynamic" else "block",
+        },
         children=wcc.Checklist(
             id={"id": uuid, "tab": tab, "selector": "Fluid annotation"},
             options=[{"label": "Show fluid annotation", "value": "Show"}],
-            value=["Show"],
+            value=["Show"] if mode != "dynamic" else [],
         ),
     )
 

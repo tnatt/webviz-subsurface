@@ -18,11 +18,14 @@ def main_view(
     get_uuid: Callable,
     volumemodel: InplaceVolumesModel,
     theme: WebvizConfigTheme,
+    mode=None,
     disjoint_set_df: pd.DataFrame = None,
 ) -> dcc.Tabs:
 
-    tabs = [
+    tabs = []
+    tabs.append(
         wcc.Tab(
+            disabled=mode == "mix",
             label="Inplace distributions",
             value="voldist",
             children=tab_view_layout(
@@ -35,6 +38,7 @@ def main_view(
                         tab="voldist",
                         volumemodel=volumemodel,
                         theme=theme,
+                        mode=mode,
                     ),
                     filter_layout(
                         uuid=get_uuid("filters"),
@@ -45,7 +49,7 @@ def main_view(
                 ],
             ),
         )
-    ]
+    )
     tabs.append(
         wcc.Tab(
             label="Tables",
@@ -61,7 +65,6 @@ def main_view(
                         volumemodel=volumemodel,
                     ),
                     filter_layout(
-                        open_details=True,
                         uuid=get_uuid("filters"),
                         tab="table",
                         volumemodel=volumemodel,
@@ -71,7 +74,7 @@ def main_view(
             ),
         )
     )
-    if volumemodel.sensrun:
+    if volumemodel.sensrun and mode != "mix":
         tabs.append(
             wcc.Tab(
                 label="Tornadoplots",
@@ -87,15 +90,10 @@ def main_view(
                             volumemodel=volumemodel,
                         ),
                         filter_layout(
-                            open_details=True,
                             uuid=get_uuid("filters"),
                             tab="tornado",
                             volumemodel=volumemodel,
-                            hide_selectors=[
-                                "SENSCASE",
-                                "SENSNAME",
-                                "SENSTYPE",
-                            ],
+                            hide_selectors=["SENSCASE", "SENSNAME", "SENSTYPE"],
                         ),
                     ],
                 ),
@@ -113,16 +111,14 @@ def main_view(
                             uuid=get_uuid("selections"),
                             tab="src-comp",
                             volumemodel=volumemodel,
-                        )
-                    ]
-                    + [
+                            compare_on="SOURCE",
+                        ),
                         filter_layout(
-                            open_details=True,
                             uuid=get_uuid("filters"),
                             tab="src-comp",
                             volumemodel=volumemodel,
                             hide_selectors=["SOURCE", "SENSTYPE"],
-                        )
+                        ),
                     ],
                 ),
             )
@@ -133,19 +129,21 @@ def main_view(
                 label="Ensemble comparison",
                 value="ens-comp",
                 children=tab_view_layout(
-                    main_layout=[
-                        html.Div(
-                            "Under development - page for analyzing volume changes "
-                            "and causes between ensembles (e.g between two model revision)",
-                            style={"margin": "50px", "font-size": "20px"},
-                        )
+                    main_layout=src_comparison_main_layout(get_uuid("main-ens-comp")),
+                    sidebar_layout=[
+                        src_comp_selections(
+                            uuid=get_uuid("selections"),
+                            tab="ens-comp",
+                            volumemodel=volumemodel,
+                            compare_on="ENSEMBLE",
+                        ),
+                        filter_layout(
+                            uuid=get_uuid("filters"),
+                            tab="ens-comp",
+                            volumemodel=volumemodel,
+                            hide_selectors=["ENSEMBLE", "SENSTYPE"],
+                        ),
                     ],
-                    sidebar_layout=filter_layout(
-                        open_details=True,
-                        uuid=get_uuid("filters"),
-                        tab="ens-comp",
-                        volumemodel=volumemodel,
-                    ),
                 ),
             )
         )
@@ -170,9 +168,15 @@ def main_view(
             )
         )
 
+    initial_tab = "voldist"
+    if mode == "mix":
+        initial_tab = "src-comp"
+    elif volumemodel.sensrun:
+        initial_tab = "tornado"
+
     return wcc.Tabs(
         id=get_uuid("tabs"),
-        value="voldist" if not volumemodel.sensrun else "tornado",
+        value=initial_tab,
         style={"width": "100%"},
         persistence=True,
         children=tabs,

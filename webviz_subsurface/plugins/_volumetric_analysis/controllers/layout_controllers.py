@@ -25,7 +25,6 @@ def layout_controllers(app: dash.Dash, get_uuid: Callable) -> None:
     ) -> Tuple[list, str, list, str]:
 
         ctx = dash.callback_context.triggered[0]
-
         if (
             tab_selected != "voldist"
             or "tabs" in ctx["prop_id"]

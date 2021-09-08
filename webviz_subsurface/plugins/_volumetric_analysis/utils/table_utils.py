@@ -1,4 +1,4 @@
-from typing import Tuple, List, Optional
+from typing import List, Optional
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 import numpy as np
@@ -56,7 +56,7 @@ def make_table_wrapper_children(
 
                 for idx, group in enumerate(groups):
                     data[group] = (
-                        name if isinstance(name, str) == 1 else list(name)[idx]
+                        name if not isinstance(name, tuple) else list(name)[idx]
                     )
                 if response in volumemodel.volume_columns:
                     data_volcols.append(data)
@@ -71,7 +71,7 @@ def make_table_wrapper_children(
                 html.Div(
                     style={"margin-top": "20px"},
                     children=create_data_table(
-                        volumemodel=volumemodel,
+                        selectors=volumemodel.selectors,
                         columns=create_table_columns(
                             columns=[col]
                             + [x for x in groups if x != "FLUID_ZONE"]
@@ -112,7 +112,7 @@ def make_table_wrapper_children(
     return html.Div(
         children=[
             create_data_table(
-                volumemodel=volumemodel,
+                selectors=volumemodel.selectors,
                 columns=create_table_columns(
                     columns=dframe.columns,
                     format_columns=dframe.columns,
@@ -155,11 +155,11 @@ def create_table_columns(
 
 # pylint: disable=inconsistent-return-statements
 def create_data_table(
-    volumemodel: InplaceVolumesModel,
     columns: list,
     height: str,
     data: List[dict],
     table_id: dict,
+    selectors: Optional[list] = None,
     style_cell: Optional[list] = None,
     style_header_conditional: Optional[list] = None,
     style_cell_conditional: Optional[list] = None,
@@ -170,20 +170,19 @@ def create_data_table(
     if not data:
         return []
 
-    if style_cell_conditional is None:
-        style_cell_conditional = [
-            {
-                "if": {
-                    "column_id": volumemodel.selectors
-                    + ["Response", "Property", "Sensitivity"]
-                },
-                "width": "10%",
-                "textAlign": "left",
-            }
-        ]
-        style_cell_conditional.extend(
-            [{"if": {"column_id": "FLUID_ZONE"}, "textAlign": "right"}]
-        )
+    if selectors is None:
+        selectors = []
+    conditional_cell_style = [
+        {
+            "if": {"column_id": selectors + ["Response", "Property", "Sensitivity"]},
+            "width": "10%",
+            "textAlign": "left",
+        },
+        {"if": {"column_id": "FLUID_ZONE"}, "textAlign": "right"},
+    ]
+    if style_cell_conditional is not None:
+        conditional_cell_style.extend(style_cell_conditional)
+
     style_data_conditional = (
         style_data_conditional if style_data_conditional is not None else []
     )
@@ -201,7 +200,7 @@ def create_data_table(
             data=data,
             style_as_list_view=True,
             style_cell=style_cell,
-            style_cell_conditional=style_cell_conditional,
+            style_cell_conditional=conditional_cell_style,
             style_data_conditional=style_data_conditional,
             style_table={
                 "height": height,

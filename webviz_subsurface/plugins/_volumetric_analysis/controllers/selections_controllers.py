@@ -276,6 +276,8 @@ def selections_controllers(
         selected_data = []
         if selected_tab == "src-comp":
             selected_data = ["SOURCE"]
+        if selected_tab == "ens-comp":
+            selected_data = ["ENSEMBLE"]
         if selected_tab == "voldist":
             selected_data = [
                 page_selections[x]

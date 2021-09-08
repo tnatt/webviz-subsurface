@@ -5,11 +5,7 @@ from webviz_subsurface._models import InplaceVolumesModel
 
 
 def src_comparison_main_layout(uuid: str) -> html.Div:
-    return html.Div(
-        id={"id": uuid, "page": "src-comp"},
-        style={"display": "block"},
-        children=src_comparison_layout(uuid),
-    )
+    return html.Div(src_comparison_layout(uuid))
 
 
 def src_comparison_layout(uuid: str) -> html.Div:
@@ -30,12 +26,19 @@ def src_comparison_layout(uuid: str) -> html.Div:
                                     "label": "QC plots",
                                     "value": "plots",
                                 },
-                                {"label": "Table", "value": "table"},
+                                {
+                                    "label": "Difference table for selected response",
+                                    "value": "table",
+                                },
+                                {
+                                    "label": "Difference table for multiple responses",
+                                    "value": "info table",
+                                },
                             ],
                             value="plots",
                         ),
                     ),
-                    html.Div(id={"id": uuid, "wrapper": "table", "page": "src-comp"}),
+                    html.Div(id={"id": uuid, "wrapper": "table"}),
                 ],
             )
         ]
@@ -46,15 +49,8 @@ def src_comp_qc_plots_layout(
     fig_dif_vs_real,
     fig_corr,
     fig_diff_vs_response,
-    fig_distribution,
-    non_accepted_count_group,
-    non_accepted_count_real,
-    selectors,
-    response,
-    source1,
-    source2,
+    barfig,
 ):
-    selectors = selectors if selectors else ["Total"]
 
     return html.Div(
         children=[
@@ -72,48 +68,53 @@ def src_comp_qc_plots_layout(
                         children=wcc.Graph(
                             config={"displayModeBar": False},
                             style={"height": "31vh"},
-                            figure=fig_corr,
-                        )
-                    ),
-                    wcc.FlexColumn(
-                        children=wcc.Graph(
-                            config={"displayModeBar": False},
-                            style={"height": "31vh"},
                             figure=fig_diff_vs_response,
                         )
                     ),
-                ],
-            ),
-            wcc.FlexBox(
-                style={"height": "32vh"},
-                children=[
                     wcc.FlexColumn(
                         children=wcc.Graph(
                             config={"displayModeBar": False},
                             style={"height": "31vh"},
-                            figure=fig_distribution,
+                            figure=fig_corr,
                         )
-                    ),
-                    wcc.FlexColumn(
-                        wcc.Frame(
-                            style={"height": "25vh"},
-                            children=[
-                                wcc.Header(
-                                    f"Summary - {response} differences {source1} vs {source2}"
-                                ),
-                                html.Div(f"Data for group: {' '.join(selectors)}"),
-                                html.Div(
-                                    f"Groups outside acceptance criteria: {non_accepted_count_group}"
-                                ),
-                                html.Div(
-                                    f"Data points outside acceptance criteria: {non_accepted_count_real}"
-                                ),
-                                html.Div("See table for more details"),
-                            ],
-                        ),
                     ),
                 ],
             ),
+            wcc.Frame(
+                style={"height": "31vh"},
+                children=[
+                    wcc.Header("Data outside acceptance criteria"),
+                    wcc.Graph(
+                        config={"displayModeBar": False},
+                        style={"height": "25vh"},
+                        figure=barfig,
+                    )
+                    if barfig is not None
+                    else html.Div("All groups accepted"),
+                ],
+            ),
+        ]
+    )
+
+
+def src_comp_table_layout(table, table_type, selections, filter_info):
+    header = (
+        (
+            f"Table showing differences for {selections['Response']} "
+            f"({selections['value2']} - {selections['value1']}):"
+        )
+        if table_type == "table"
+        else "Table showing differences in percent for multiple responses:"
+    )
+
+    return html.Div(
+        children=[
+            wcc.Header(header),
+            html.Div(
+                style={"margin-bottom": "20px", "font-weight": "bold"},
+                children=f"{filter_info.capitalize()} {selections['filters'][filter_info][0]}",
+            ),
+            table,
         ]
     )
 
@@ -121,20 +122,23 @@ def src_comp_qc_plots_layout(
 def settings_layout(uuid: str, tab: str) -> wcc.Selectors:
     return wcc.Selectors(
         label="⚙️ SETTINGS",
-        open_details=True,
+        open_details=False,
         children=[
             diff_mode_selector(uuid, tab),
-            sort_selector(uuid, tab),
             colorby_selector(uuid, tab),
             axis_focus_selector(uuid, tab),
+            remove_zero_responses(uuid, tab),
+            remove_accepted(uuid, tab),
         ],
     )
 
 
 def src_comp_selections(
-    uuid: str, volumemodel: InplaceVolumesModel, tab: str
+    uuid: str, volumemodel: InplaceVolumesModel, tab: str, compare_on: str
 ) -> html.Div:
     """Layout for selecting tornado data"""
+    elements = volumemodel.sources if compare_on == "SOURCE" else volumemodel.ensembles
+
     return html.Div(
         children=[
             wcc.Selectors(
@@ -142,18 +146,20 @@ def src_comp_selections(
                 open_details=True,
                 children=[
                     source_selector(
-                        volumemodel,
                         uuid,
                         tab,
-                        label="Source A",
-                        value=volumemodel.sources[0],
+                        label=f"{compare_on.capitalize()} A",
+                        selector_label="value1",
+                        value=elements[0],
+                        elements=elements,
                     ),
                     source_selector(
-                        volumemodel,
                         uuid,
                         tab,
-                        label="Source B",
-                        value=volumemodel.sources[1],
+                        label=f"{compare_on.capitalize()} B",
+                        selector_label="value2",
+                        value=elements[1] if compare_on == "SOURCE" else elements[-1],
+                        elements=elements,
                     ),
                     response_selector(volumemodel, uuid, tab),
                     group_by_selector(volumemodel, uuid, tab),
@@ -165,19 +171,27 @@ def src_comp_selections(
     )
 
 
-def sort_selector(uuid: str, tab: str) -> html.Div:
-    return wcc.Checklist(
-        id={"id": uuid, "tab": tab, "selector": "Sort"},
-        options=[{"label": "Sort table on difference (absolute)", "value": "sort"}],
-        value=["sort"],
-    )
-
-
 def axis_focus_selector(uuid: str, tab: str) -> html.Div:
     return wcc.Checklist(
         id={"id": uuid, "tab": tab, "selector": "Axis focus"},
-        options=[{"label": "Focus REAL plot on non-accepted", "value": "focus"}],
+        options=[{"label": "Focus diff plots on non-accepted", "value": "focus"}],
         value=["focus"],
+    )
+
+
+def remove_zero_responses(uuid: str, tab: str) -> html.Div:
+    return wcc.Checklist(
+        id={"id": uuid, "tab": tab, "selector": "Remove zeros"},
+        options=[{"label": "Remove data with no volume", "value": "remove"}],
+        value=["remove"],
+    )
+
+
+def remove_accepted(uuid: str, tab: str) -> html.Div:
+    return wcc.Checklist(
+        id={"id": uuid, "tab": tab, "selector": "Remove accepted"},
+        options=[{"label": "Remove accepted data from table", "value": "remove"}],
+        value=[],
     )
 
 
@@ -214,7 +228,7 @@ def acceptance_controls(uuid: str, tab: str) -> html.Div:
             ),
             html.Div(
                 children=[
-                    wcc.Label("Disregard response values below:"),
+                    wcc.Label("Ignore response values below:"),
                     dcc.Input(
                         id={"id": uuid, "tab": tab, "selector": "Ignore value"},
                         type="number",
@@ -231,17 +245,18 @@ def acceptance_controls(uuid: str, tab: str) -> html.Div:
 
 
 def source_selector(
-    volumemodel: InplaceVolumesModel,
     uuid: str,
     tab: str,
     label: str,
+    selector_label: str,
     value: str,
+    elements: list,
 ) -> wcc.Dropdown:
 
     return wcc.Dropdown(
         label=label,
-        id={"id": uuid, "tab": tab, "selector": label},
-        options=[{"label": src, "value": src} for src in volumemodel.sources],
+        id={"id": uuid, "tab": tab, "selector": selector_label},
+        options=[{"label": src, "value": src} for src in elements],
         value=value,
         clearable=False,
     )
@@ -263,6 +278,7 @@ def response_selector(
             label="Response",
             options=[{"label": i, "value": i} for i in volumemodel.responses],
             value=volumemodel.volume_columns[0],
+            clearable=False,
         ),
     )
 

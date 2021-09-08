@@ -13,7 +13,6 @@ from ..utils.table_utils import create_table_columns, create_data_table
 def set_info_controller(
     app: dash.Dash,
     get_uuid: Callable,
-    volumemodel: InplaceVolumesModel,
     disjoint_set_df=None,
 ) -> None:
     @app.callback(
@@ -49,7 +48,6 @@ def set_info_controller(
 
             return html.Div(
                 children=create_data_table(
-                    volumemodel=volumemodel,
                     columns=create_table_columns(df.columns),
                     data=df.to_dict("records"),
                     height="85vh",
