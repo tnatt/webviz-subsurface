@@ -1,5 +1,7 @@
-from typing import Callable, List
+from typing import Callable, List, Optional
+import numpy as np
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
 import dash
 from dash.dependencies import Input, Output, State, ALL
 from dash.exceptions import PreventUpdate
@@ -16,10 +18,9 @@ from webviz_subsurface._abbreviations.volume_terminology import (
     volume_unit,
 )
 from webviz_subsurface._figures import create_figure
-from ..utils.utils import update_relevant_components
-from ..utils.figure_utils import fluid_annotation
-from ..utils.table_utils import (
-    make_table_wrapper_children,
+from ..utils.utils import update_relevant_components, move_to_end_of_list
+from ..utils.table_and_figure_utils import (
+    fluid_annotation,
     create_table_columns,
     create_data_table,
 )
@@ -466,9 +467,7 @@ def distribution_controllers(
                         children=create_data_table(
                             columns=tornado_table.columns
                             + create_table_columns(
-                                columns=["Reference"],
-                                format_columns=["Reference"],
-                                use_si_format=True,
+                                columns=["Reference"], use_si_format=["Reference"]
                             ),
                             data=table,
                             height="20vh",
@@ -479,3 +478,114 @@ def distribution_controllers(
                 ]
             ),
         )
+
+
+# pylint: disable=too-many-locals
+def make_table_wrapper_children(
+    dframe: pd.DataFrame,
+    responses: list,
+    volumemodel: InplaceVolumesModel,
+    selections: dict,
+    table_type: str,
+    view_height: float,
+    page_selected: str,
+    groups: Optional[list] = None,
+) -> html.Div:
+
+    groups = groups if groups is not None else []
+
+    if table_type == "Statistics table":
+        statcols = ["Mean", "Stddev", "P90", "P10", "Minimum", "Maximum"]
+        groups = [x for x in groups if x != "REAL"]
+        df_groups = dframe.groupby(groups) if groups else [(None, dframe)]
+
+        data_properties = []
+        data_volcols = []
+        for response in responses:
+            if not is_numeric_dtype(dframe[response]):
+                continue
+            for name, df in df_groups:
+                values = df[response]
+                data = {
+                    "Response"
+                    if response in volumemodel.volume_columns
+                    else "Property": response,
+                    "Mean": values.mean(),
+                    "Stddev": values.std(),
+                    "P10": np.nanpercentile(values, 90),
+                    "P90": np.nanpercentile(values, 10),
+                    "Minimum": values.min(),
+                    "Maximum": values.max(),
+                }
+                if "FLUID_ZONE" not in groups:
+                    data.update(
+                        FLUID_ZONE=(" + ").join(selections["filters"]["FLUID_ZONE"])
+                    )
+
+                for idx, group in enumerate(groups):
+                    data[group] = (
+                        name if not isinstance(name, tuple) else list(name)[idx]
+                    )
+                if response in volumemodel.volume_columns:
+                    data_volcols.append(data)
+                else:
+                    data_properties.append(data)
+
+        if data_volcols and data_properties:
+            view_height = view_height / 2
+
+        return html.Div(
+            children=[
+                html.Div(
+                    style={"margin-top": "20px"},
+                    children=create_data_table(
+                        selectors=volumemodel.selectors,
+                        columns=create_table_columns(
+                            columns=move_to_end_of_list(
+                                "FLUID_ZONE", [col] + groups + statcols
+                            ),
+                            no_format=[col] + groups,
+                            use_si_format=statcols if col == "Response" else None,
+                        ),
+                        data=data,
+                        height=f"{view_height}vh",
+                        table_id={"table_id": f"{page_selected}-{col}"},
+                    ),
+                )
+                for col, data in zip(
+                    ["Response", "Property"], [data_volcols, data_properties]
+                )
+            ]
+        )
+
+    # if table type Mean table
+    groupby_real = (
+        selections["Group by"] is not None and "REAL" in selections["Group by"]
+    )
+    if "REAL" in groups and not groupby_real:
+        groups.remove("REAL")
+
+    columns = responses + [x for x in groups if x not in responses]
+    dframe = (
+        dframe[columns].groupby(groups).mean().reset_index()
+        if groups
+        else dframe[responses].mean().to_frame().T
+    )
+
+    if "FLUID_ZONE" not in dframe:
+        dframe["FLUID_ZONE"] = (" + ").join(selections["filters"]["FLUID_ZONE"])
+
+    dframe = dframe[move_to_end_of_list("FLUID_ZONE", dframe.columns)]
+    return html.Div(
+        children=[
+            create_data_table(
+                selectors=volumemodel.selectors,
+                columns=create_table_columns(
+                    columns=dframe.columns, use_si_format=volumemodel.volume_columns
+                ),
+                data=dframe.iloc[::-1].to_dict("records"),
+                height=f"{view_height}vh",
+                table_id={"table_id": f"{page_selected}-meantable"},
+            )
+        ]
+    )

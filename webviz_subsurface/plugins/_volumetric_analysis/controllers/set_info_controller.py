@@ -6,8 +6,7 @@ import dash_html_components as html
 import plotly.express as px
 import plotly.graph_objects as go
 import webviz_core_components as wcc
-from webviz_subsurface._models import InplaceVolumesModel
-from ..utils.table_utils import create_table_columns, create_data_table
+from ..utils.table_and_figure_utils import create_table_columns, create_data_table
 
 
 def set_info_controller(
@@ -45,7 +44,6 @@ def set_info_controller(
         df = df.sort_values(by=["SET"])
 
         if display_option == "table":
-
             return html.Div(
                 children=create_data_table(
                     columns=create_table_columns(df.columns),
@@ -67,6 +65,7 @@ def set_info_controller(
                     },
                 ),
             )
+
         colors = (
             px.colors.qualitative.Safe
             + px.colors.qualitative.T10
@@ -74,8 +73,8 @@ def set_info_controller(
         )
         df["FIPNUM"] = df["FIPNUM"].astype(str)
         figures = []
-        test = [("ZONE", "REGION"), ("ZONE", "FIPNUM"), ("REGION", "FIPNUM")]
-        for y_col, x_col in test:
+        fig_columns = [("ZONE", "REGION"), ("ZONE", "FIPNUM"), ("REGION", "FIPNUM")]
+        for y_col, x_col in fig_columns:
             y = df[y_col].unique()
             x = sorted(df[x_col].unique(), key=int if x_col == "FIPNUM" else None)
             data = []

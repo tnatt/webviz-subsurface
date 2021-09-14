@@ -4,11 +4,7 @@ import webviz_core_components as wcc
 from webviz_subsurface._models import InplaceVolumesModel
 
 
-def src_comparison_main_layout(uuid: str) -> html.Div:
-    return html.Div(src_comparison_layout(uuid))
-
-
-def src_comparison_layout(uuid: str) -> html.Div:
+def comparison_main_layout(uuid: str) -> html.Div:
     return html.Div(
         children=[
             wcc.Frame(
@@ -45,13 +41,12 @@ def src_comparison_layout(uuid: str) -> html.Div:
     )
 
 
-def src_comp_qc_plots_layout(
+def comparison_qc_plots_layout(
     fig_dif_vs_real,
     fig_corr,
     fig_diff_vs_response,
     barfig,
 ):
-
     return html.Div(
         children=[
             html.Div(
@@ -83,29 +78,29 @@ def src_comp_qc_plots_layout(
             wcc.Frame(
                 style={"height": "31vh"},
                 children=[
-                    wcc.Header("Data outside acceptance criteria"),
+                    wcc.Header("Highlighted data"),
                     wcc.Graph(
                         config={"displayModeBar": False},
                         style={"height": "25vh"},
                         figure=barfig,
                     )
                     if barfig is not None
-                    else html.Div("All groups accepted"),
+                    else html.Div("No data within highlight criteria"),
                 ],
             ),
         ]
     )
 
 
-def src_comp_table_layout(table, table_type, selections, filter_info):
-    header = (
-        (
+def comparison_table_layout(table, table_type, selections, filter_info):
+    if table_type == "table":
+        header = (
             f"Table showing differences for {selections['Response']} "
             f"({selections['value2']} - {selections['value1']}):"
         )
-        if table_type == "table"
-        else "Table showing differences in percent for multiple responses:"
-    )
+    else:
+        diff_mode = "percent" if selections["Diff mode"] == "diff (%)" else "true value"
+        header = f"Table showing differences in {diff_mode} for multiple responses:"
 
     return html.Div(
         children=[
@@ -124,16 +119,15 @@ def settings_layout(uuid: str, tab: str) -> wcc.Selectors:
         label="⚙️ SETTINGS",
         open_details=False,
         children=[
-            diff_mode_selector(uuid, tab),
             colorby_selector(uuid, tab),
             axis_focus_selector(uuid, tab),
             remove_zero_responses(uuid, tab),
-            remove_accepted(uuid, tab),
+            remove_non_highlighted_data(uuid, tab),
         ],
     )
 
 
-def src_comp_selections(
+def comparison_selections(
     uuid: str, volumemodel: InplaceVolumesModel, tab: str, compare_on: str
 ) -> html.Div:
     """Layout for selecting tornado data"""
@@ -142,7 +136,7 @@ def src_comp_selections(
     return html.Div(
         children=[
             wcc.Selectors(
-                label="PLOT CONROLS",
+                label="CONROLS",
                 open_details=True,
                 children=[
                     source_selector(
@@ -163,7 +157,8 @@ def src_comp_selections(
                     ),
                     response_selector(volumemodel, uuid, tab),
                     group_by_selector(volumemodel, uuid, tab),
-                    acceptance_controls(uuid, tab),
+                    diff_mode_selector(uuid, tab),
+                    highlight_controls(uuid, tab),
                 ],
             ),
             settings_layout(uuid, tab),
@@ -187,35 +182,40 @@ def remove_zero_responses(uuid: str, tab: str) -> html.Div:
     )
 
 
-def remove_accepted(uuid: str, tab: str) -> html.Div:
+def remove_non_highlighted_data(uuid: str, tab: str) -> html.Div:
     return wcc.Checklist(
         id={"id": uuid, "tab": tab, "selector": "Remove accepted"},
-        options=[{"label": "Remove accepted data from table", "value": "remove"}],
+        options=[
+            {"label": "Display only highlighted data in table", "value": "remove"}
+        ],
         value=[],
     )
 
 
 def diff_mode_selector(uuid: str, tab: str):
-    return wcc.RadioItems(
-        label="Show difference in",
-        id={"id": uuid, "tab": tab, "selector": "Diff mode"},
-        options=[
-            {"label": "Percent", "value": "diff (%)"},
-            {"label": "True value", "value": "diff"},
-        ],
-        labelStyle={"display": "inline-flex", "margin-right": "5px"},
-        value="diff (%)",
+    return html.Div(
+        style={"margin-top": "10px"},
+        children=wcc.RadioItems(
+            label="Difference mode",
+            id={"id": uuid, "tab": tab, "selector": "Diff mode"},
+            options=[
+                {"label": "Percent", "value": "diff (%)"},
+                {"label": "True value", "value": "diff"},
+            ],
+            labelStyle={"display": "inline-flex", "margin-right": "5px"},
+            value="diff (%)",
+        ),
     )
 
 
-def acceptance_controls(uuid: str, tab: str) -> html.Div:
+def highlight_controls(uuid: str, tab: str) -> html.Div:
     return html.Div(
-        style={"margin-top": "20px"},
+        style={"margin-top": "10px"},
         children=[
-            html.Label("Acceptance controls", className="webviz-underlined-label"),
+            html.Label("Data highlight criterias", className="webviz-underlined-label"),
             html.Div(
                 children=[
-                    wcc.Label("Accepted absolute diff (%):"),
+                    wcc.Label("Absolute diff (%) above:"),
                     dcc.Input(
                         id={"id": uuid, "tab": tab, "selector": "Accept value"},
                         type="number",
@@ -293,11 +293,11 @@ def colorby_selector(
             label="Color plots on",
             id={"id": uuid, "tab": tab, "selector": "Color by"},
             options=[
-                {"label": "Accepted", "value": "accepted"},
+                {"label": "Highlighted", "value": "highlighted"},
                 {"label": "1st groupby", "value": "groups"},
             ],
             labelStyle={"display": "inline-flex", "margin-right": "5px"},
-            value="accepted",
+            value="highlighted",
         ),
     )
 
@@ -309,16 +309,17 @@ def group_by_selector(
 ) -> html.Div:
     available_selectors = [
         x
-        for x in ["FIPNUM", "SET", "REGION", "ZONE", "REAL"]
+        for x in ["FIPNUM", "SET", "REGION", "ZONE", "FACIES", "REAL"]
         if x in volumemodel.selectors
     ]
     return html.Div(
         style={"margin-top": "10px"},
         children=wcc.Dropdown(
-            label="Group by",
+            label="Investigate differences on level",
             id={"id": uuid, "tab": tab, "selector": "Group by"},
             options=[{"label": elm, "value": elm} for elm in available_selectors],
             value=[available_selectors[0]],
+            placeholder="Total",
             multi=True,
             clearable=False,
         ),

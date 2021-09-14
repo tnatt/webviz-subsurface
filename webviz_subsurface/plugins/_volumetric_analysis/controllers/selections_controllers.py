@@ -525,19 +525,24 @@ def selections_controllers(
         ),
         prevent_initial_call=True,
     )
-    def update_region_filter(
-        mode: str,
-        ids,
-        selected_tab,
-        selected_page,
-        selections,
-        wrapper_ids,
-        reg_select_ids,
+    def update_region_filters(
+        selected_reg_filter: list,
+        reg_filter_ids: list,
+        selected_tab: str,
+        selected_page: str,
+        selections: dict,
+        wrapper_ids: list,
+        reg_select_ids: list,
     ) -> tuple:
-
-        page_value = [
+        """
+        Callback to update the visible region filter between FIPNUM or ZONE/REGION.
+        When changing, the active selection will be used to set the new selection.
+        Note this callback will only be used for cases where each FIPNUM belongs to
+        a unique ZONE and REGION.
+        """
+        selected = [
             value
-            for id_value, value in zip(reg_select_ids, mode)
+            for id_value, value in zip(reg_select_ids, selected_reg_filter)
             if id_value["tab"] == selected_tab
         ]
 
@@ -545,7 +550,7 @@ def selections_controllers(
         filters = selections[selected_page]["filters"]
 
         values = {}
-        if page_value[0] != "fipnum":
+        if selected[0] != "fipnum":
             values["FIPNUM"] = df["FIPNUM"].unique()
             for elm in ["REGION", "ZONE"]:
                 values[elm] = df.loc[df["FIPNUM"].isin(filters["FIPNUM"])][elm].unique()
@@ -559,13 +564,13 @@ def selections_controllers(
             values["FIPNUM"] = df.loc[mask]["FIPNUM"].unique()
 
         styles = {}
-        styles["FIPNUM"] = {"display": "none" if page_value[0] != "fipnum" else "block"}
-        styles["REGION"] = {"display": "none" if page_value[0] == "fipnum" else "block"}
-        styles["ZONE"] = {"display": "none" if page_value[0] == "fipnum" else "block"}
+        styles["FIPNUM"] = {"display": "none" if selected[0] != "fipnum" else "block"}
+        styles["REGION"] = {"display": "none" if selected[0] == "fipnum" else "block"}
+        styles["ZONE"] = {"display": "none" if selected[0] == "fipnum" else "block"}
 
         return (
             update_relevant_components(
-                id_list=ids,
+                id_list=reg_filter_ids,
                 update_info=[
                     {
                         "new_value": value,

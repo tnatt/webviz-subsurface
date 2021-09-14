@@ -14,7 +14,7 @@ from webviz_subsurface._models import EnsembleSetModel, InplaceVolumesModel
 from webviz_subsurface._models import caching_ensemble_set_model_factory
 from webviz_subsurface._models.inplace_volumes_model import extract_volumes
 
-from .volume_combinator import VolumeCombinator
+from .volume_validator_and_combinator import VolumeValidatorAndCombinator
 from .views import clientside_stores, main_view
 from .controllers import (
     distribution_controllers,
@@ -102,20 +102,13 @@ aggregated_data/parameters.csv)
         csvfile_parameters: Path = None,
         ensembles: list = None,
         volfiles: dict = None,
-        volfiles_dynamic: dict = None,
         volfolder: str = "share/results/volumes",
         fipfile: Path = None,
         non_net_facies: Optional[List[str]] = None,
+        prevent_data_processing: bool = False,
     ):
 
         super().__init__()
-
-        WEBVIZ_ASSETS.add(
-            Path(webviz_subsurface.__file__).parent
-            / "_assets"
-            / "css"
-            / "container.css"
-        )
         WEBVIZ_ASSETS.add(
             Path(webviz_subsurface.__file__).parent
             / "_assets"
@@ -126,17 +119,13 @@ aggregated_data/parameters.csv)
         self.csvfile_vol = csvfile_vol
         self.csvfile_parameters = csvfile_parameters
 
-        if csvfile_vol and ensembles:
-            raise ValueError(
-                'Incorrent arguments. Either provide a "csvfile" or "ensembles" and "volfiles"'
-            )
         if csvfile_vol:
             volumes_table = read_csv(csvfile_vol)
             parameters: Optional[pd.DataFrame] = (
                 read_csv(csvfile_parameters) if csvfile_parameters else None
             )
 
-        elif ensembles and (volfiles or volfiles_dynamic):
+        elif ensembles and volfiles:
             ensemble_paths = {
                 ens: webviz_settings.shared_settings["scratch_ensembles"][ens]
                 for ens in ensembles
@@ -147,31 +136,23 @@ aggregated_data/parameters.csv)
                 )
             )
             parameters = self.emodel.load_parameters()
-
-            self.mode = "static"
-            if volfiles_dynamic is not None:
-                self.mode = "dynamic"
-                if volfiles is not None:
-                    self.mode = "mix"
-                    volfiles.update(volfiles_dynamic)
-                else:
-                    volfiles = volfiles_dynamic
-
             volumes_table = extract_volumes(self.emodel, volfolder, volfiles)
 
         else:
             raise ValueError(
-                'Incorrent arguments. Either provide a "csvfile" or "ensembles" and "volfiles"'
+                'Incorrent arguments. Either provide a "csvfile_vol" or "ensembles" and "volfiles"'
             )
 
-        vcomb = VolumeCombinator(volumes_table=volumes_table, fipfile=fipfile)
+        vcomb = VolumeValidatorAndCombinator(
+            volumes_table=volumes_table, fipfile=fipfile
+        )
         self.disjoint_set_df = vcomb.disjoint_set_df
-
         self.volmodel = InplaceVolumesModel(
             volumes_table=vcomb.dframe,
             parameter_table=parameters,
             non_net_facies=non_net_facies,
-            data_processing=self.mode != "dynamic",
+            volume_type=vcomb.volume_type,
+            prevent_data_processing=prevent_data_processing,
         )
         self.theme = webviz_settings.theme
         self.set_callbacks(app)
@@ -185,7 +166,6 @@ aggregated_data/parameters.csv)
                     get_uuid=self.uuid,
                     volumemodel=self.volmodel,
                     theme=self.theme,
-                    mode=self.mode,
                     disjoint_set_df=self.disjoint_set_df,
                 ),
             ],
@@ -199,12 +179,7 @@ aggregated_data/parameters.csv)
             volumemodel=self.volmodel,
             theme=self.theme,
         )
-        comparison_controllers(
-            app=app,
-            get_uuid=self.uuid,
-            volumemodel=self.volmodel,
-            disjoint_set_df=self.disjoint_set_df,
-        )
+        comparison_controllers(app=app, get_uuid=self.uuid, volumemodel=self.volmodel)
         layout_controllers(app=app, get_uuid=self.uuid)
         export_data_controllers(app=app, get_uuid=self.uuid)
         set_info_controller(
@@ -221,7 +196,6 @@ aggregated_data/parameters.csv)
                     (read_csv, [{"csv_file": self.csvfile_parameters}])
                 )
         else:
-
             store_functions = self.emodel.webvizstore
         return store_functions
 

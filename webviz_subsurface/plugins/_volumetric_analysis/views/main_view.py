@@ -10,7 +10,7 @@ from .distribution_main_layout import distributions_main_layout, table_main_layo
 from .selections_view import selections_layout, table_selections_layout
 from .tornado_selections_view import tornado_selections_layout
 from .tornado_layout import tornado_main_layout
-from .src_comparison_layout import src_comparison_main_layout, src_comp_selections
+from .comparison_layout import comparison_main_layout, comparison_selections
 from .set_layout import set_filter_layout, set_main_layout, set_selections_layout
 
 
@@ -18,14 +18,13 @@ def main_view(
     get_uuid: Callable,
     volumemodel: InplaceVolumesModel,
     theme: WebvizConfigTheme,
-    mode=None,
     disjoint_set_df: pd.DataFrame = None,
 ) -> dcc.Tabs:
 
     tabs = []
     tabs.append(
         wcc.Tab(
-            disabled=mode == "mix",
+            disabled=volumemodel.volume_type == "mix",
             label="Inplace distributions",
             value="voldist",
             children=tab_view_layout(
@@ -38,7 +37,6 @@ def main_view(
                         tab="voldist",
                         volumemodel=volumemodel,
                         theme=theme,
-                        mode=mode,
                     ),
                     filter_layout(
                         uuid=get_uuid("filters"),
@@ -74,7 +72,7 @@ def main_view(
             ),
         )
     )
-    if volumemodel.sensrun and mode != "mix":
+    if volumemodel.sensrun and volumemodel.volume_type != "mix":
         tabs.append(
             wcc.Tab(
                 label="Tornadoplots",
@@ -105,9 +103,9 @@ def main_view(
                 label="Source comparison",
                 value="src-comp",
                 children=tab_view_layout(
-                    main_layout=src_comparison_main_layout(get_uuid("main-src-comp")),
+                    main_layout=comparison_main_layout(get_uuid("main-src-comp")),
                     sidebar_layout=[
-                        src_comp_selections(
+                        comparison_selections(
                             uuid=get_uuid("selections"),
                             tab="src-comp",
                             volumemodel=volumemodel,
@@ -129,9 +127,9 @@ def main_view(
                 label="Ensemble comparison",
                 value="ens-comp",
                 children=tab_view_layout(
-                    main_layout=src_comparison_main_layout(get_uuid("main-ens-comp")),
+                    main_layout=comparison_main_layout(get_uuid("main-ens-comp")),
                     sidebar_layout=[
-                        src_comp_selections(
+                        comparison_selections(
                             uuid=get_uuid("selections"),
                             tab="ens-comp",
                             volumemodel=volumemodel,
@@ -150,10 +148,10 @@ def main_view(
     if disjoint_set_df is not None:
         tabs.append(
             wcc.Tab(
-                label="FIPNUM mapping QC",
+                label="Fipfile QC",
                 value="setinfo",
                 children=tab_view_layout(
-                    main_layout=set_main_layout(uuid=get_uuid("main-setinfo")),
+                    main_layout=set_main_layout(get_uuid("main-setinfo")),
                     sidebar_layout=[
                         set_selections_layout(
                             uuid=get_uuid("selections"), tab="setinfo"
@@ -169,7 +167,7 @@ def main_view(
         )
 
     initial_tab = "voldist"
-    if mode == "mix":
+    if volumemodel.volume_type == "mix":
         initial_tab = "src-comp"
     elif volumemodel.sensrun:
         initial_tab = "tornado"

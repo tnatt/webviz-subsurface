@@ -1,34 +1,36 @@
-from typing import Callable
+from typing import Callable, Union, Optional
 
 import numpy as np
+import pandas as pd
 import dash
+import dash_table
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import dash_html_components as html
 import plotly.express as px
+import plotly.graph_objects as go
 from webviz_subsurface._models import InplaceVolumesModel
 
 from webviz_subsurface._figures import create_figure
-from ..views.src_comparison_layout import (
-    src_comp_qc_plots_layout,
-    src_comp_table_layout,
+from ..views.comparison_layout import (
+    comparison_qc_plots_layout,
+    comparison_table_layout,
 )
-from ..utils.figure_utils import add_correlation_line
-from ..utils.table_utils import create_table_columns, create_data_table
-from ..utils.utils import move_to_end_of_list, move_to_start_of_list
+from ..utils.table_and_figure_utils import (
+    add_correlation_line,
+    create_table_columns,
+    create_data_table,
+)
+from ..utils.utils import move_to_end_of_list
 
 
 def comparison_controllers(
     app: dash.Dash,
     get_uuid: Callable,
     volumemodel: InplaceVolumesModel,
-    disjoint_set_df=None,
 ) -> None:
     @app.callback(
-        Output(
-            {"id": get_uuid("main-src-comp"), "wrapper": "table"},
-            "children",
-        ),
+        Output({"id": get_uuid("main-src-comp"), "wrapper": "table"}, "children"),
         Input(get_uuid("selections"), "data"),
         Input({"id": get_uuid("main-src-comp"), "element": "display-option"}, "value"),
         State(
@@ -53,7 +55,7 @@ def comparison_controllers(
             if not selections["update"]:
                 raise PreventUpdate
 
-        return main_callback(
+        return comparison_callback(
             compare_on="SOURCE",
             volumemodel=volumemodel,
             selections=selections,
@@ -62,10 +64,7 @@ def comparison_controllers(
         )
 
     @app.callback(
-        Output(
-            {"id": get_uuid("main-ens-comp"), "wrapper": "table"},
-            "children",
-        ),
+        Output({"id": get_uuid("main-ens-comp"), "wrapper": "table"}, "children"),
         Input(get_uuid("selections"), "data"),
         Input({"id": get_uuid("main-ens-comp"), "element": "display-option"}, "value"),
         State(
@@ -90,7 +89,7 @@ def comparison_controllers(
             if not selections["update"]:
                 raise PreventUpdate
 
-        return main_callback(
+        return comparison_callback(
             compare_on="ENSEMBLE",
             volumemodel=volumemodel,
             selections=selections,
@@ -99,9 +98,13 @@ def comparison_controllers(
         )
 
 
-def main_callback(
-    compare_on, volumemodel, selections, display_option, response_options
-):
+def comparison_callback(
+    compare_on: str,
+    volumemodel: InplaceVolumesModel,
+    selections: dict,
+    display_option: str,
+    response_options: list,
+) -> html.Div:
     if selections["value1"] == selections["value2"]:
         return html.Div("Comparison between equal sources")
 
@@ -109,15 +112,19 @@ def main_callback(
     if "FLUID_ZONE" not in groupby:
         groupby.append("FLUID_ZONE")
 
-    test = "SOURCE" if compare_on != "SOURCE" else "ENSEMBLE"
+    do_not_compare_on = "SOURCE" if compare_on != "SOURCE" else "ENSEMBLE"
     groups = ["REAL", compare_on]
     for selector in groupby:
         if selector not in groups:
             groups.append(selector)
 
     if display_option == "info table":
-        response_options = [x["value"] for x in response_options]
-        responses = move_to_start_of_list(selections["Response"], response_options)
+        drop_responses = ["STOIIP", "GIIP", "ASSOCIATEDGAS", "ASSOCIATEDOIL"]
+        responses = [selections["Response"]] + [
+            x["value"]
+            for x in response_options
+            if x["value"] not in drop_responses and x["value"] != selections["Response"]
+        ]
 
         df = create_comparison_df(
             volumemodel,
@@ -127,13 +134,19 @@ def main_callback(
             abssort_on=f"{selections['Response']} diff (%)",
             groups=groupby + [compare_on],
         )
-        return src_comp_table_layout(
+
+        return comparison_table_layout(
             table=create_comaprison_table(
-                display_option, df, groupby, selections, compare_on
+                display_option,
+                df,
+                groupby,
+                selections,
+                compare_on,
+                volumemodel=volumemodel,
             ),
             table_type=display_option,
             selections=selections,
-            filter_info=test,
+            filter_info=do_not_compare_on,
         )
 
     diffdf_real = create_comparison_df(
@@ -142,7 +155,6 @@ def main_callback(
         selections=selections,
         responses=[selections["Response"]],
         groups=groups,
-        abssort_on="diff (%)",
         rename_diff_col=True,
     )
 
@@ -153,11 +165,11 @@ def main_callback(
             selections=selections,
             responses=[selections["Response"]],
             groups=[x for x in groups if x != "REAL"],
-            abssort_on=selections["Diff mode"],
             rename_diff_col=True,
         )
-        diffdf_group["# reals ❌"] = add_accepted_real_count(
-            diffdf_group, diffdf_real, groupby
+        # Add column with number of accepted realizations
+        diffdf_group["# reals 💡"] = diffdf_group.apply(
+            lambda row: find_higlighted_real_count(row, diffdf_real, groupby), axis=1
         )
 
     df = diffdf_group if "REAL" not in groupby else diffdf_real
@@ -165,7 +177,7 @@ def main_callback(
         return html.Div("Only data with no volume present!")
 
     if display_option == "table":
-        return src_comp_table_layout(
+        return comparison_table_layout(
             table=create_comaprison_table(
                 tabletype=display_option,
                 df=df,
@@ -176,7 +188,7 @@ def main_callback(
             ),
             table_type=display_option,
             selections=selections,
-            filter_info=test,
+            filter_info=do_not_compare_on,
         )
 
     if display_option == "plots":
@@ -187,9 +199,7 @@ def main_callback(
             df=df, x=resp1, y=resp2, selections=selections, groupby=groupby
         )
         scatter_corr = add_correlation_line(
-            figure=scatter_corr,
-            xy_min=min(df[resp1].min(), df[resp2].min()),
-            xy_max=max(df[resp1].max(), df[resp2].max()),
+            figure=scatter_corr, xy_min=df[resp1].min(), xy_max=df[resp1].max()
         )
         scatter_diff_vs_response = create_scatterfig(
             df=df,
@@ -207,14 +217,14 @@ def main_callback(
             groupby=groupby,
             diff_mode=selections["Diff mode"],
         )
-
         barfig_non_accepted = create_barfig(
-            df=df[df["accepted"] == "no"],
+            df=df[df["highlighted"] == "yes"],
             groupby=groupby,
             diff_mode=selections["Diff mode"],
+            colorcol=resp1,
         )
 
-    return src_comp_qc_plots_layout(
+    return comparison_qc_plots_layout(
         scatter_diff_vs_real,
         scatter_corr,
         scatter_diff_vs_response,
@@ -223,34 +233,39 @@ def main_callback(
 
 
 def create_comparison_df(
-    volumemodel,
+    volumemodel: InplaceVolumesModel,
     on_col: str,
     responses: list,
     selections: dict,
     groups: list,
-    abssort_on: str,
+    abssort_on: str = "diff (%)",
     rename_diff_col: bool = False,
-):
+) -> pd.DataFrame:
 
-    dframe = create_response_diff_df(
-        volumemodel,
-        on_col=on_col,
-        value1=selections["value1"],
-        value2=selections["value2"],
-        responses=responses,
-        filters=selections["filters"],
-        groups=groups,
-    )
-
+    value1, value2 = selections["value1"], selections["value2"]
     resp = selections["Response"]
+
+    selections["filters"][on_col] = [value1, value2]
+    dframe = volumemodel.get_df(selections["filters"], groups)
+
+    groupby = [x for x in groups if x != on_col]
+    df = dframe.loc[:, [on_col] + groupby + responses].pivot_table(
+        columns=on_col, index=groupby
+    )
+    responses = [col for col in responses if col in df]
+    for col in responses:
+        df[col, "diff"] = df[col][value2] - df[col][value1]
+        df[col, "diff (%)"] = ((df[col][value2] / df[col][value1]) - 1) * 100
+        df.loc[df[col]["diff"] == 0, (col, "diff (%)")] = 0
+    df = df.replace([np.inf, -np.inf], np.nan)
+    dframe = df[responses].reset_index()
+
     if selections["Remove zeros"]:
         dframe = dframe.loc[
-            ~((dframe[resp]["diff"] == 0) & (dframe[resp][selections["value1"]] == 0))
+            ~((dframe[resp]["diff"] == 0) & (dframe[resp][value1] == 0))
         ]
 
-    dframe["accepted"] = _compute_accepted_col(
-        dframe, resp, selections["value1"], selections
-    )
+    dframe["highlighted"] = _compute_accepted_col(dframe, resp, value1, selections)
     dframe.columns = dframe.columns.map(" ".join).str.strip(" ")
     if rename_diff_col:
         dframe = dframe.rename(
@@ -259,94 +274,67 @@ def create_comparison_df(
     return dframe.sort_values(by=[abssort_on], key=abs, ascending=False)
 
 
-def create_response_diff_df(
-    volumemodel,
-    on_col: str,
-    value1: str,
-    value2: str,
-    responses: list,
-    filters: dict,
-    groups: list,
-):
-
-    filters[on_col] = [value1, value2]
-    dframe = volumemodel.get_df(filters, groups)
-    groupby = [x for x in groups if x != on_col]
-    df = dframe.loc[:, [on_col] + groupby + responses].pivot_table(
-        columns=on_col, index=groupby
-    )
-    responses = [col for col in responses if col in df]
-    for resp in responses:
-        df[resp, "diff"] = df[resp][value2] - df[resp][value1]
-        df[resp, "diff (%)"] = ((df[resp][value2] / df[resp][value1]) - 1) * 100
-        df.loc[df[resp]["diff"] == 0, (resp, "diff (%)")] = 0
-    df = df.replace([np.inf, -np.inf], np.nan)
-    return df[responses].reset_index()
-
-
-def _compute_accepted_col(df, response, value1, selections):
+def _compute_accepted_col(
+    df: pd.DataFrame, response: str, value1: str, selections: dict
+) -> list:
     accept_mask = (df[response][value1] > selections["Ignore value"]) & (
         df[response]["diff (%)"].abs() < selections["Accept value"]
     ) | (df[response][value1] <= selections["Ignore value"])
-
-    return np.where(accept_mask, "yes", "no")
-
-
-def add_accepted_real_count(df, df_real, groups):
-    return df.apply(lambda row: find_non_accepted_reals(row, df_real, groups), axis=1)
+    return np.where(accept_mask, "no", "yes")
 
 
-def find_non_accepted_reals(row, df_per_real, groups):
+def find_higlighted_real_count(
+    row: pd.Series, df_per_real: pd.DataFrame, groups: list
+) -> str:
     query = " & ".join([f"{col}=='{row[col]}'" for col in groups])
     result = df_per_real.query(query)
-    return str(len(result[result["accepted"] == "no"]))
+    return str(len(result[result["highlighted"] == "yes"]))
 
 
 def create_comaprison_table(
-    tabletype, df, groupby, selections, compare_on, use_si_format=None
-):
-    df.loc[df["accepted"] == "no", "accepted"] = "❌"
-    df.loc[df["accepted"] == "yes", "accepted"] = "✔️"
+    tabletype: str,
+    df: pd.DataFrame,
+    groupby: list,
+    selections: dict,
+    compare_on: str,
+    use_si_format: Optional[bool] = None,
+    volumemodel: Optional[InplaceVolumesModel] = None,
+) -> dash_table.DataTable:
+
+    diff_mode_percent = selections["Diff mode"] == "diff (%)"
 
     if selections["Remove accepted"]:
-        df = df.loc[df["accepted"] == "❌"]
+        df = df.loc[df["highlighted"] == "yes"]
         if df.empty:
             return html.Div(
                 [
-                    html.Div("All data accepted!"),
-                    html.Div("To see the data turn off setting 'Remove accepted data'"),
+                    html.Div("All data outside highlight criteria!"),
+                    html.Div(
+                        "To see the data turn off setting 'Display only highlighted data'"
+                    ),
                 ]
             )
 
     if tabletype == "info table":
-        diff_cols = [x for x in df.columns if "diff (%)" in x]
-        rename_dict = {x: x.split(" diff (%)")[0] for x in diff_cols}
-        df = df[groupby + diff_cols + ["accepted"]].rename(columns=rename_dict)
-        df = df.drop(
-            columns=[
-                x
-                for x in ["STOIIP", "GIIP", "ASSOCIATEDGAS", "ASSOCIATEDOIL"]
-                if x != selections["Response"] and x in df
-            ]
+        diff_cols = [x for x in df.columns if selections["Diff mode"] in x]
+        if not diff_mode_percent:
+            diff_cols = [x for x in diff_cols if not "(%)" in x]
+        rename_dict = {x: x.split(f" {selections['Diff mode']}")[0] for x in diff_cols}
+        df = df[groupby + diff_cols + ["highlighted"]].rename(columns=rename_dict)
+
+        columns = create_table_columns(
+            columns=move_to_end_of_list("FLUID_ZONE", df.columns),
+            no_format=groupby,
+            use_si_format=volumemodel.volume_columns if not diff_mode_percent else None,
+            use_percentage=list(df.columns) if diff_mode_percent else None,
         )
-        columns = [
-            {
-                "id": col,
-                "name": col,
-                "type": "numeric" if col not in groupby else "text",
-                "format": {"specifier": ".1f"},
-            }
-            for col in move_to_end_of_list("FLUID_ZONE", df.columns)
-        ]
     else:
         columns = create_table_columns(
             columns=move_to_end_of_list("FLUID_ZONE", df.columns),
-            use_si_format=use_si_format,
-            format_columns=[col for col in df.columns if col not in groupby],
+            no_format=groupby,
+            use_si_format=list(df.columns) if use_si_format else None,
+            use_percentage=["diff (%)"],
         )
-        for col in columns:
-            if "%" in col["id"] and isinstance(col["format"], dict):
-                col["format"].update(specifier=".1f")
 
     return create_data_table(
         selectors=groupby,
@@ -357,31 +345,38 @@ def create_comaprison_table(
         style_cell={"textAlign": "center"},
         style_data_conditional=[
             {
-                "if": {"filter_query": "{accepted} = '❌'"},
-                "color": "#FF1243",
+                "if": {"filter_query": "{highlighted} = 'yes'"},
+                "backgroundColor": "rgb(230, 230, 230)",
                 "fontWeight": "bold",
             },
         ],
-        style_cell_conditional=[{"if": {"column_id": "accepted"}, "display": "None"}]
-        if tabletype == "info table"
-        else None,
-        #    disjoint_set_df=disjoint_set_df,
+        style_cell_conditional=[
+            {"if": {"column_id": "highlighted"}, "display": "None"}
+        ],
     )
 
 
-def create_scatterfig(df, x, y, selections, groupby, diff_mode=None):
+def create_scatterfig(
+    df: pd.DataFrame,
+    x: str,
+    y: str,
+    selections: dict,
+    groupby: list,
+    diff_mode: Optional[str] = None,
+) -> go.Figure:
     colorby = selections["Color by"]
-    if colorby != "accepted":
+    if colorby != "highlighted":
         colorby = groupby[0] if groupby else None
-    color_map = {"no": "#FF1243", "yes": "#80B7BC"}
+    color_map = {"yes": "#FF1243", "no": "#80B7BC"}
     fig = (
         create_figure(
             plot_type="scatter",
             data_frame=df,
             x=x,
             y=y,
+            # size=colorby,
             color_discrete_sequence=px.colors.qualitative.Dark2,
-            color_discrete_map=color_map if colorby == "accepted" else None,
+            color_discrete_map=color_map if colorby == "highlighted" else None,
             color=colorby,
             hover_data={col: True for col in groupby},
         )
@@ -397,34 +392,36 @@ def create_scatterfig(df, x, y, selections, groupby, diff_mode=None):
     return fig
 
 
-def find_diff_plot_range(df, diff_mode, selections):
+def find_diff_plot_range(df: pd.DataFrame, diff_mode: str, selections: dict) -> list:
     """
     Find plot range for diff axis. If axis focus is selected
     the range will center around the non-acepted data points.
     An 10% extension is added to the axis
     """
-    if selections["Axis focus"] and "no" in df["accepted"].values:
-        data = df[df["accepted"] == "no"][diff_mode]
-    else:
-        data = df[diff_mode]
+    if selections["Axis focus"] and "yes" in df["highlighted"].values:
+        df = df[df["highlighted"] == "yes"]
 
-    low = min(data.min(), -selections["Accept value"])
-    high = max(data.max(), selections["Accept value"])
+    low = min(df[diff_mode].min(), -selections["Accept value"])
+    high = max(df[diff_mode].max(), selections["Accept value"])
     extend = (high - low) * 0.1
     return [low - extend, high + extend]
 
 
-def create_barfig(df, groupby, diff_mode):
+def create_barfig(
+    df: pd.DataFrame, groupby: list, diff_mode: str, colorcol: str
+) -> Union[None, go.Figure]:
     if df.empty:
         return None
     return (
         create_figure(
             plot_type="bar",
             data_frame=df,
-            x=df[groupby].astype(str).agg(" ".join, axis=1),
+            x=df[[x for x in groupby if x != "FLUID_ZONE"]]
+            .astype(str)
+            .agg(" ".join, axis=1),
             y=diff_mode,
-            color_continuous_scale="reds",
-            color="diff (%)" if diff_mode == "diff" else "diff",
+            color_continuous_scale="teal_r",
+            color=df[colorcol],
             hover_data={col: True for col in groupby},
             opacity=1,
         )

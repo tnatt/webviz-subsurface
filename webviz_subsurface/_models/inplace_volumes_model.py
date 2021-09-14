@@ -42,14 +42,16 @@ class InplaceVolumesModel:
         parameter_table: Optional[pd.DataFrame] = None,
         non_net_facies: Optional[List[str]] = None,
         drop_constants: bool = True,
-        data_processing: bool = False,
+        volume_type: str = "static",
+        prevent_data_processing: bool = False,
     ):
+        self._volume_type = volume_type
         self.pmodel = ParametersModel(
             parameter_table, drop_constants=drop_constants, keep_numeric_only=False
         )
         selectors = [x for x in volumes_table.columns if x in self.POSSIBLE_SELECTORS]
 
-        if data_processing:
+        if volume_type != "dynamic" and not prevent_data_processing:
             # compute water zone volumes if total volumes are present
             if any(col.endswith("_TOTAL") for col in volumes_table.columns):
                 volumes_table = self._compute_water_zone_volumes(
@@ -67,9 +69,6 @@ class InplaceVolumesModel:
                 df = volumes_table[selectors + fluid_columns].copy()
                 df.columns = df.columns.str.replace(f"_{fluid}", "")
                 df["FLUID_ZONE"] = fluid.lower()
-                # Rename PORE to PORV (PORE will be deprecated..)
-                if "PORE" in df:
-                    df.rename(columns={"PORE": "PORV"}, inplace=True)
                 dfs.append(df)
             self._dataframe = pd.concat(dfs)
 
@@ -113,6 +112,10 @@ class InplaceVolumesModel:
     @property
     def sensrun(self) -> bool:
         return self.pmodel.sensrun
+
+    @property
+    def volume_type(self) -> bool:
+        return self._volume_type
 
     @property
     def sensitivities(self) -> List[str]:

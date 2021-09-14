@@ -70,7 +70,7 @@ def filter_dropdowns(
     tab: str,
 ) -> html.Div:
     dropdowns: List[html.Div] = []
-    selectors = ["SET", "REGION", "ZONE", "FIPNUM"]
+    selectors = ["REGION", "ZONE", "FIPNUM", "SET"]
     for selector in selectors:
         if selector not in disjoint_set_df:
             continue
