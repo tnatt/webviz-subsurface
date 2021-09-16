@@ -13,6 +13,7 @@ from webviz_config.webviz_store import webvizstore
 from webviz_config.common_cache import CACHE
 from webviz_subsurface._figures import create_figure
 from .main_view import main_view
+from .varviz_callback import varviz_callback
 
 
 class GeoData(WebvizPluginABC):
@@ -36,12 +37,24 @@ class GeoData(WebvizPluginABC):
         )
 
         self.selectors = ["Delft3D model", "Formation", "Attribute"]
+
+        self.variogram_filters = [
+            "Delft3D model",
+            "Attribute",
+            "Identifier",
+            "Indicator",
+        ]
+        self.variogram_responses = [
+            col for col in self.csvfile_variogram if col not in self.variogram_filters
+        ]
+        print(self.variogram_responses)
+
         self.responses = [
             col
             for col in self.csvfile_channel
             if col not in self.selectors and not col.startswith("cropbox")
         ]
-
+        print(self.csvfile_variogram)
         self.set_callbacks(app)
 
     @property
@@ -52,12 +65,19 @@ class GeoData(WebvizPluginABC):
                     get_uuid=self.uuid,
                     responses=self.responses,
                     selectors=self.selectors,
-                    dframe=self.csvfile_channel,
+                    channel_dframe=self.csvfile_channel,
+                    variogram_dframe=self.csvfile_variogram,
+                    variogram_filters=self.variogram_filters,
+                    variogram_responses=self.variogram_responses,
                 ),
             ],
         )
 
     def set_callbacks(self, app: Dash) -> None:
+        varviz_callback(
+            app=app, get_uuid=self.uuid, variogram_df=self.csvfile_variogram
+        )
+
         @app.callback(
             Output(self.uuid("main-table"), "children"),
             Input({"id": self.uuid("selections-table"), "selector": ALL}, "value"),
