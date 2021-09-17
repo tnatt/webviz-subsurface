@@ -64,7 +64,10 @@ def varviz_callback(app, get_uuid, variogram_df):
         else:
             traces = clicked_trace
         image_divs = []
-        for curve in traces.get("points", []):
+        gauss_img = gaussian_random_field()
+        for idx, curve in enumerate(traces.get("points", [])):
+            if idx > 4:
+                break
             label = str(
                 {
                     filter_id.get("filter"): filter_val
@@ -74,7 +77,7 @@ def varviz_callback(app, get_uuid, variogram_df):
                 }
             )
             fig = px.imshow(
-                gaussian_random_field(),
+                gauss_img,
                 color_continuous_scale="BrBG",
             )
             fig.update_layout(
