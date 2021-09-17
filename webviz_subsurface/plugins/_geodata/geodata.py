@@ -40,15 +40,20 @@ class GeoData(WebvizPluginABC):
 
         self.variogram_filters = [
             "Delft3D model",
+            "Variogram parameterzation",
+            "Quality factor",
             "Attribute",
             "Identifier",
             "Indicator",
+            "Crop box number",
         ]
         self.variogram_responses = [
-            col for col in self.csvfile_variogram if col not in self.variogram_filters
+            col
+            for col in self.csvfile_variogram
+            if col
+            not in self.variogram_filters
+            + ["cropbox_x0", "cropbox_x1", "cropbox_y0", "cropbox_y1"]
         ]
-        print(self.variogram_responses)
-
         self.responses = [
             col
             for col in self.csvfile_channel
