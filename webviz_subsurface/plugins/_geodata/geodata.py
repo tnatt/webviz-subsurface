@@ -31,6 +31,7 @@ class GeoData(WebvizPluginABC):
         self.csvfile_variogram = (
             read_csv(csvfile_variogram) if csvfile_variogram else None
         )
+        self.csvfile_variogram = self.csvfile_variogram.dropna(how="any")
 
         self.theme_colors = webviz_settings.theme.plotly_theme.get("layout", {}).get(
             "colorway", []
@@ -59,7 +60,6 @@ class GeoData(WebvizPluginABC):
             for col in self.csvfile_channel
             if col not in self.selectors and not col.startswith("cropbox")
         ]
-        print(self.csvfile_variogram)
         self.set_callbacks(app)
 
     @property

@@ -18,6 +18,7 @@ def varviz_callback(app, get_uuid, variogram_df):
         selection = {
             id_value["selector"]: value
             for id_value, value in zip(selector_ids, varviz_selections)
+            if value is not None
         }
         filters = {
             id_value["filter"]: value
@@ -26,7 +27,7 @@ def varviz_callback(app, get_uuid, variogram_df):
         dframe = variogram_df
         for filt, values in filters.items():
             dframe = dframe.loc[dframe[filt].isin(values)]
-        dframe = dframe.dropna(how="any")
+
         fig = px.scatter(
             dframe,
             **selection,
