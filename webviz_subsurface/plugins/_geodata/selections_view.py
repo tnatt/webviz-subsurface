@@ -2,28 +2,26 @@ from typing import List, Optional
 from dash import html
 import webviz_core_components as wcc
 from webviz_config import WebvizConfigTheme
-from webviz_subsurface._models import InplaceVolumesModel
 
 
-def button(
-    uuid: str,
-    title: str,
-    page_id: str,
-) -> html.Button:
-    return html.Button(
-        title,
-        className="webviz-inplace-vol-btn",
-        id={"id": uuid, "button": page_id},
-    )
-
-
-def plot_selections_layout(
-    uuid: str, volumemodel: InplaceVolumesModel, tab: str
-) -> wcc.Selectors:
-    return wcc.Selectors(
-        label="PLOT CONTROLS",
-        open_details=True,
-        children=plot_selector_dropdowns(uuid=uuid, volumemodel=volumemodel, tab=tab),
+def plot_selections_layout(uuid: str, responses, selectors, dframe) -> wcc.Selectors:
+    return html.Div(
+        children=[
+            wcc.Selectors(
+                label="PLOT CONTROLS",
+                open_details=True,
+                children=plot_selector_dropdowns(
+                    uuid=uuid, responses=responses, selectors=selectors
+                ),
+            ),
+            wcc.Selectors(
+                label="FILTERS",
+                open_details=True,
+                children=[
+                    filter_dropdowns(uuid=uuid, filters=selectors, dframe=dframe)
+                ],
+            ),
+        ]
     )
 
 
@@ -97,9 +95,7 @@ def filter_dropdowns(uuid: str, filters, dframe) -> html.Div:
     return html.Div(dropdowns)
 
 
-def plot_selector_dropdowns(
-    uuid: str, volumemodel: InplaceVolumesModel, tab: str
-) -> List[html.Div]:
+def plot_selector_dropdowns(uuid: str, responses, selectors) -> List[html.Div]:
     """Makes dropdowns for each selector"""
 
     dropdowns: List[html.Div] = []
@@ -114,29 +110,27 @@ def plot_selector_dropdowns(
     ]:
         if selector == "Plot type":
             elements = ["histogram", "scatter", "distribution", "box", "bar"]
-            value = elements[0] if not volumemodel.sensrun else "box"
+            value = elements[0]
         if selector == "X Response":
-            elements = volumemodel.responses
-            value = elements[0] if not volumemodel.sensrun else "SENSNAME"
+            elements = responses
+            value = elements[0]
         if selector == "Y Response":
-            elements = volumemodel.responses
-            value = None if not volumemodel.sensrun else elements[0]
+            elements = responses
+            value = None
         if selector == "Subplots":
-            elements = [x for x in volumemodel.selectors if x != "REAL"]
+            elements = selectors
             value = None
         if selector == "Color by":
-            elements = volumemodel.selectors
-            value = "ENSEMBLE" if not volumemodel.sensrun else "SENSCASE"
+            elements = selectors
+            value = None
 
         dropdowns.append(
             wcc.Dropdown(
                 label=selector,
-                id={"id": uuid, "tab": tab, "selector": selector},
+                id={"id": uuid, "selector": selector},
                 options=[{"label": elm, "value": elm} for elm in elements],
                 value=value,
                 clearable=selector in ["Subplots", "Color by", "Y Response"],
-                disabled=selector == "Subplots"
-                or (selector == "Y Response" and not volumemodel.sensrun),
             )
         )
     return dropdowns

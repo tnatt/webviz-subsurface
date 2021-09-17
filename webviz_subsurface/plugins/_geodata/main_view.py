@@ -2,33 +2,68 @@ from typing import Callable
 
 from dash import html, dcc
 import webviz_core_components as wcc
-from webviz_config import WebvizConfigTheme
-from .selections_view import table_selections_layout
+from .selections_view import table_selections_layout, plot_selections_layout
 
 
-def main_view(
-    get_uuid: Callable, theme: WebvizConfigTheme, responses, filters, dframe
-) -> dcc.Tabs:
+def main_view(get_uuid: Callable, responses, selectors, dframe) -> dcc.Tabs:
 
     tabs = [
         wcc.Tab(
             label="Plots",
             value="plots",
             children=tab_view_layout(
-                main_layout=html.Div(id=get_uuid("main-plots")),
-                sidebar_layout=[html.Div(id=get_uuid("selections-plots"))],
+                main_layout=wcc.Frame(
+                    color="white",
+                    highlight=False,
+                    style={"height": "91vh"},
+                    children=[
+                        wcc.RadioItems(
+                            vertical=False,
+                            id=get_uuid("main-plots-display-option"),
+                            options=[
+                                {
+                                    "label": "Plot with table",
+                                    "value": "plot_with_table",
+                                },
+                                {
+                                    "label": "Plot",
+                                    "value": "plot",
+                                },
+                                {
+                                    "label": "Table",
+                                    "value": "table",
+                                },
+                            ],
+                            value="plot_with_table",
+                        ),
+                        html.Div(id=get_uuid("main-plots")),
+                    ],
+                ),
+                sidebar_layout=[
+                    plot_selections_layout(
+                        uuid=get_uuid("selections-plots"),
+                        responses=responses,
+                        selectors=selectors,
+                        dframe=dframe,
+                    )
+                ],
             ),
         ),
         wcc.Tab(
             label="Tables",
             value="tables",
             children=tab_view_layout(
-                main_layout=html.Div(id=get_uuid("main-table")),
+                main_layout=wcc.Frame(
+                    color="white",
+                    highlight=False,
+                    style={"height": "91vh"},
+                    children=html.Div(id=get_uuid("main-table")),
+                ),
                 sidebar_layout=[
                     table_selections_layout(
                         uuid=get_uuid("selections-table"),
                         responses=responses,
-                        filters=filters,
+                        filters=selectors,
                         dframe=dframe,
                     )
                 ],

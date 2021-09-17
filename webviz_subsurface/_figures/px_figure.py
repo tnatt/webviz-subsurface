@@ -72,7 +72,7 @@ def update_xaxes(figure: go.Figure, plot_type: str, **kwargs: Any) -> go.Figure:
         linewidth=2,
         linecolor="black",
         mirror=True,
-        title=None if facet_col is not None else kwargs.get("x"),
+        title=None if facet_col is not None else str(kwargs.get("x")),
         showticklabels=(data_frame[facet_col].nunique() <= 100)
         if facet_col is not None
         else None,
