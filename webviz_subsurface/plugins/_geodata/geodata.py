@@ -32,7 +32,9 @@ class GeoData(WebvizPluginABC):
             read_csv(csvfile_variogram) if csvfile_variogram else None
         )
         self.csvfile_variogram = self.csvfile_variogram.dropna(how="any")
-
+        self.csvfile_variogram["Crop box number"] = self.csvfile_variogram[
+            "Crop box number"
+        ].astype(str)
         self.theme_colors = webviz_settings.theme.plotly_theme.get("layout", {}).get(
             "colorway", []
         )
@@ -41,11 +43,12 @@ class GeoData(WebvizPluginABC):
 
         self.variogram_filters = [
             "Delft3D model",
+            "Indicator",
+            "Attribute",
+            "Crop box number",
             "Variogram parameterzation",
             "Quality factor",
-            "Attribute",
             "Identifier",
-            "Indicator",
         ]
         self.variogram_responses = [
             col
@@ -196,6 +199,7 @@ class GeoData(WebvizPluginABC):
                         ),
                         bargap=0.1,
                     ),
+                    trendline=selections["trendline"],
                     yaxis=dict(
                         showticklabels=True, tickfont_size=18, title_font_size=15
                     ),
@@ -394,7 +398,7 @@ def create_dash_table(columns, data, selectors, height):
         {
             "if": {"column_id": selectors + ["Response"]},
             "textAlign": "left",
-            "width": "15%",
+            "width": "10%",
         }
     ]
     return html.Div(

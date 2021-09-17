@@ -107,14 +107,16 @@ def update_layout(figure: go.Figure, **kwargs: Any) -> go.Figure:
 def update_traces(figure: go.Figure, **kwargs: Any) -> go.Figure:
     data_frame = kwargs["data_frame"]
     facet_col = kwargs.get("facet_col")
-    return (
+    if kwargs.get("size") is None:
         figure.update_traces(
             marker_size=max((20 - (1.5 * data_frame[facet_col].nunique())), 5)
             if facet_col is not None
             else 20,
             selector=lambda t: t["type"] in ["scatter", "scattergl"],
         )
-        .update_traces(textposition="inside", selector=dict(type="pie"))
+
+    return (
+        figure.update_traces(textposition="inside", selector=dict(type="pie"))
         .for_each_trace(lambda t: set_marker_color(t))
         .for_each_trace(
             lambda t: t.update(

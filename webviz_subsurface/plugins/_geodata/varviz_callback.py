@@ -1,6 +1,7 @@
 import plotly.express as px
 from dash import html, Input, Output, State, callback, ALL, callback_context
 import webviz_core_components as wcc
+from webviz_subsurface._figures import create_figure
 
 
 def varviz_callback(app, get_uuid, variogram_df):
@@ -28,25 +29,13 @@ def varviz_callback(app, get_uuid, variogram_df):
         for filt, values in filters.items():
             dframe = dframe.loc[dframe[filt].isin(values)]
 
-        fig = px.scatter(
-            dframe,
+        return create_figure(
             **selection,
-            hover_data=list(
-                filters.keys(),
-            ),
+            data_frame=dframe,
+            plot_type="scatter",
+            hover_data=list(filters.keys()),
             color_continuous_scale="viridis",
         )
-        fig.update_layout(
-            {
-                "plot_bgcolor": "rgba(0, 0, 0, 0)",
-                "paper_bgcolor": "rgba(0, 0, 0, 0)",
-            }
-        )
-        fig.update_traces(
-            marker=dict(line=dict(width=1, color="DarkSlateGrey")),
-            selector=dict(mode="markers"),
-        )
-        return fig
 
     @callback(
         Output(get_uuid("varviz-image-wrapper"), "children"),

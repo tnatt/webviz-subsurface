@@ -46,9 +46,8 @@ def table_selections_layout(uuid: str, responses, filters, dframe) -> wcc.Select
                         label="Group by",
                         id={"id": uuid, "selector": "Group by"},
                         options=[{"label": elm, "value": elm} for elm in filters],
-                        value=None,
+                        value=["Delft3D model", "Formation"],
                         multi=True,
-                        clearable=False,
                     ),
                     wcc.SelectWithLabel(
                         label="Responses",
@@ -57,7 +56,11 @@ def table_selections_layout(uuid: str, responses, filters, dframe) -> wcc.Select
                             "selector": "table_responses",
                         },
                         options=[{"label": i, "value": i} for i in responses],
-                        value=responses,
+                        value=[
+                            x
+                            for x in responses
+                            if ("mean" in x or "sd" in x) and not "mode" in x
+                        ],
                         size=min(
                             20,
                             len(responses),
@@ -97,7 +100,9 @@ def varviz_selections_layout(uuid: str, filters, responses, dframe) -> wcc.Selec
                     wcc.Dropdown(
                         label="color",
                         id={"id": uuid, "selector": "color"},
-                        options=[{"label": elm, "value": elm} for elm in responses],
+                        options=[
+                            {"label": elm, "value": elm} for elm in list(dframe.columns)
+                        ],
                         value="Crop box number",
                         clearable=True,
                     ),
@@ -189,6 +194,19 @@ def plot_selector_dropdowns(uuid: str, responses, selectors) -> List[html.Div]:
                 clearable=selector in ["Subplots", "Color by", "Y Response"],
             )
         )
+    dropdowns.append(
+        wcc.Dropdown(
+            label="Trendline",
+            id={"id": uuid, "selector": "trendline"},
+            options=[
+                {"label": "Ordinary Least Square", "value": "ols"},
+                {"label": "Locally weighted smoothing", "value": "lowess"},
+            ],
+            value=None,
+            placeholder="Select algorithm",
+            clearable=True,
+        )
+    )
     return dropdowns
 
 
