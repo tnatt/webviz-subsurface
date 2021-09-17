@@ -46,7 +46,6 @@ class GeoData(WebvizPluginABC):
             "Attribute",
             "Identifier",
             "Indicator",
-            "Crop box number",
         ]
         self.variogram_responses = [
             col
