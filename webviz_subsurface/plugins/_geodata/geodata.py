@@ -21,20 +21,23 @@ class GeoData(WebvizPluginABC):
         self,
         app: Dash,
         webviz_settings: WebvizSettings,
-        csvfile_channel: Path = None,
-        csvfile_variogram: Path = None,
+        csvfile_channel: Path,
+        csvfile_variogram: Path,
     ):
 
         super().__init__()
-
-        self.csvfile_channel = read_csv(csvfile_channel) if csvfile_channel else None
-        self.csvfile_variogram = (
-            read_csv(csvfile_variogram) if csvfile_variogram else None
+        self.csvfile_channel = csvfile_channel
+        self.csvfile_variogram = csvfile_variogram
+        self.channels_df = (
+            read_csv(self.csvfile_channel) if self.csvfile_channel else None
         )
-        self.csvfile_variogram = self.csvfile_variogram.dropna(how="any")
-        self.csvfile_variogram["Crop box number"] = self.csvfile_variogram[
+
+        self.variogram_df = read_csv(self.csvfile_variogram)
+        self.variogram_df = self.variogram_df.dropna(how="any")
+        self.variogram_df["Crop box number"] = self.variogram_df[
             "Crop box number"
         ].astype(str)
+
         self.theme_colors = webviz_settings.theme.plotly_theme.get("layout", {}).get(
             "colorway", []
         )
@@ -52,17 +55,23 @@ class GeoData(WebvizPluginABC):
         ]
         self.variogram_responses = [
             col
-            for col in self.csvfile_variogram
+            for col in self.variogram_df
             if col
             not in self.variogram_filters
             + ["cropbox_x0", "cropbox_x1", "cropbox_y0", "cropbox_y1"]
         ]
         self.responses = [
             col
-            for col in self.csvfile_channel
+            for col in self.channels_df
             if col not in self.selectors and not col.startswith("cropbox")
         ]
         self.set_callbacks(app)
+
+    def add_webvizstore(self) -> List[Tuple[Callable, list]]:
+        return [
+            (read_csv, [{"csv_file": fn}])
+            for fn in [self.csvfile_variogram, self.csvfile_channel]
+        ]
 
     @property
     def layout(self) -> html.Div:
@@ -72,8 +81,8 @@ class GeoData(WebvizPluginABC):
                     get_uuid=self.uuid,
                     responses=self.responses,
                     selectors=self.selectors,
-                    channel_dframe=self.csvfile_channel,
-                    variogram_dframe=self.csvfile_variogram,
+                    channel_dframe=self.channels_df,
+                    variogram_dframe=self.variogram_df,
                     variogram_filters=self.variogram_filters,
                     variogram_responses=self.variogram_responses,
                 ),
@@ -81,9 +90,7 @@ class GeoData(WebvizPluginABC):
         )
 
     def set_callbacks(self, app: Dash) -> None:
-        varviz_callback(
-            app=app, get_uuid=self.uuid, variogram_df=self.csvfile_variogram
-        )
+        varviz_callback(app=app, get_uuid=self.uuid, variogram_df=self.variogram_df)
 
         @app.callback(
             Output(self.uuid("main-table"), "children"),
@@ -105,7 +112,7 @@ class GeoData(WebvizPluginABC):
                 for id_value, value in zip(filter_ids, table_filters)
             }
 
-            dframe = self.csvfile_channel
+            dframe = self.channels_df
             for filt, values in filters.items():
                 dframe = dframe.loc[dframe[filt].isin(values)]
 
@@ -143,7 +150,7 @@ class GeoData(WebvizPluginABC):
                 for id_value, value in zip(filter_ids, plot_filters)
             }
 
-            dframe = self.csvfile_channel
+            dframe = self.channels_df
             for filt, values in filters.items():
                 dframe = dframe.loc[dframe[filt].isin(values)]
 
