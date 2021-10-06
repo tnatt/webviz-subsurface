@@ -94,6 +94,13 @@ def varviz_selections_layout(uuid: str, filters, responses, dframe) -> wcc.Selec
                         clearable=False,
                     ),
                     wcc.Dropdown(
+                        label="Subplots",
+                        id={"id": uuid, "selector": "facet_col"},
+                        options=[{"label": elm, "value": elm} for elm in filters],
+                        value=None,
+                        clearable=True,
+                    ),
+                    wcc.Dropdown(
                         label="color",
                         id={"id": uuid, "selector": "color"},
                         options=[

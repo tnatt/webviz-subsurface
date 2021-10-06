@@ -190,10 +190,9 @@ def channel_callback(
             id_value["selector"]: values
             for id_value, values in zip(selector_ids, selector_values)
         }
-
         settings = {
             selector: {"disable": False, "value": selections[selector]}
-            for selector in ["Y Response", "Color by", "X Response", "trendline"]
+            for selector in ["Y Response", "X Response", "trendline"]
         }
 
         if plot_type in ["distribution", "histogram"]:
@@ -210,15 +209,11 @@ def channel_callback(
             y_elm = selectors
             x_elm = responses
 
-        colorby_elm = y_elm if plot_type == "scatter" else selectors
         settings["Y Response"]["options"] = [
             {"label": elm, "value": elm} for elm in y_elm
         ]
         settings["X Response"]["options"] = [
             {"label": elm, "value": elm} for elm in x_elm
-        ]
-        settings["Color by"]["options"] = [
-            {"label": elm, "value": elm} for elm in colorby_elm
         ]
         settings["trendline"]["disable"] = plot_type != "scatter"
 
@@ -242,14 +237,14 @@ def make_table(
     responses: list,
     table_type: str,
     selectors: list,
-    height,
+    height: str,
     groups: Optional[list] = None,
 ) -> html.Div:
 
     groups = groups if groups is not None else []
 
     if table_type == "Statistics table":
-        statcols = ["Mean", "Stddev", "P90", "P10", "Minimum", "Maximum"]
+        statcols = ["Mean", "Stddev", "P90", "P10", "Min", "Max", "Count"]
         df_groups = dframe.groupby(groups) if groups else [(None, dframe)]
 
         data_list = []
@@ -264,8 +259,9 @@ def make_table(
                     "Stddev": values.std(),
                     "P10": np.nanpercentile(values, 90),
                     "P90": np.nanpercentile(values, 10),
-                    "Minimum": values.min(),
-                    "Maximum": values.max(),
+                    "Min": values.min(),
+                    "Max": values.max(),
+                    "Count": len(values),
                 }
 
                 for idx, group in enumerate(groups):
@@ -280,7 +276,7 @@ def make_table(
                     "id": col,
                     "name": col,
                     "type": "numeric",
-                    "format": {"specifier": ".1f"},
+                    "format": {"specifier": ".1f"} if col != "Count" else None,
                 }
                 for col in ["Response"] + groups + statcols
             ],

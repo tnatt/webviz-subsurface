@@ -16,6 +16,17 @@ from .analouge_callbacks import analouge_callback
 
 
 class GeoData(WebvizPluginABC):
+
+    INDICATOR_RENAMING = {
+        "0": "Inactive cells",
+        "1": "Active channel",
+        "2": "Channel fill",
+        "3": "Delta top background",
+        "4": "Mouthbar",
+        "5": "Delta front background",
+        "6": "Prodaelta",
+    }
+
     def __init__(
         self,
         app: Dash,
@@ -29,14 +40,7 @@ class GeoData(WebvizPluginABC):
         self.csvfile_variogram = csvfile_variogram
         self.csvfile_channel = csvfile_channel
         self.csvfile_analouge = csvfile_analouge
-        self.channels_df = read_csv(self.csvfile_channel)
-        self.analouge_df = (
-            read_csv(self.csvfile_analouge)
-            if self.csvfile_analouge is not None
-            else None
-        )
-        self.analouge_selectors = ["Study Name", "Attribute"]
-        self.analouge_responses = ["Width", "Thickness"]
+
         self.variogram_df = read_csv(self.csvfile_variogram)
         self.variogram_df = self.variogram_df.dropna(how="any")
         self.variogram_df["Crop box number"] = self.variogram_df[
@@ -46,13 +50,16 @@ class GeoData(WebvizPluginABC):
         self.variogram_df.loc[
             self.variogram_df["Quality factor"] < 0, "Quality factor"
         ] = 0
-
-        self.theme_colors = webviz_settings.theme.plotly_theme.get("layout", {}).get(
-            "colorway", []
-        )
-
-        self.selectors = ["Delft3D model", "Formation", "Attribute"]
-
+        self.variogram_df.replace({"Indicator": self.INDICATOR_RENAMING}, inplace=True)
+        self.variogram_df.replace({"Attribute": {"Porosity": "porosity"}}, inplace=True)
+        self.channels_df = read_csv(self.csvfile_channel)
+        self.cannel_selectors = ["Delft3D model", "Formation", "Attribute"]
+        self.cahannel_responses = [
+            "channel width mean",
+            "channel width sd",
+            "channel height mean",
+            "channel height sd",
+        ]
         self.variogram_filters = [
             "Delft3D model",
             "Indicator",
@@ -69,12 +76,19 @@ class GeoData(WebvizPluginABC):
             and "cropbox" not in col
             and col != "Standard deviation"
         ]
-        self.responses = [
-            "channel width mean",
-            "channel width sd",
-            "channel height mean",
-            "channel height sd",
-        ]
+
+        self.analouge_df = (
+            read_csv(self.csvfile_analouge)
+            if self.csvfile_analouge is not None
+            else None
+        )
+        self.analouge_selectors = ["Study Name", "Attribute"]
+        self.analouge_responses = ["Width", "Thickness"]
+
+        self.theme_colors = webviz_settings.theme.plotly_theme.get("layout", {}).get(
+            "colorway", []
+        )
+
         self.set_callbacks()
 
     def add_webvizstore(self) -> List[Tuple[Callable, list]]:
@@ -93,8 +107,8 @@ class GeoData(WebvizPluginABC):
             children=[
                 main_view(
                     get_uuid=self.uuid,
-                    responses=self.responses,
-                    selectors=self.selectors,
+                    responses=self.cahannel_responses,
+                    selectors=self.cannel_selectors,
                     channel_dframe=self.channels_df,
                     variogram_dframe=self.variogram_df,
                     variogram_filters=self.variogram_filters,
@@ -111,8 +125,8 @@ class GeoData(WebvizPluginABC):
         channel_callback(
             get_uuid=self.uuid,
             channels_df=self.channels_df,
-            responses=self.responses,
-            selectors=self.selectors,
+            responses=self.cahannel_responses,
+            selectors=self.cannel_selectors,
         )
         analouge_callback(
             get_uuid=self.uuid,
