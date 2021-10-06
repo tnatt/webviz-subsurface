@@ -4,7 +4,7 @@ import webviz_core_components as wcc
 from webviz_subsurface._figures import create_figure
 
 
-def varviz_callback(app, get_uuid, variogram_df):
+def varviz_callback(get_uuid, variogram_df):
     @callback(
         Output(get_uuid("varviz-scatter"), "figure"),
         Input({"id": get_uuid("selections-varviz"), "selector": ALL}, "value"),

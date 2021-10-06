@@ -46,7 +46,7 @@ def table_selections_layout(uuid: str, responses, filters, dframe) -> wcc.Select
                         label="Group by",
                         id={"id": uuid, "selector": "Group by"},
                         options=[{"label": elm, "value": elm} for elm in filters],
-                        value=["Delft3D model", "Formation"],
+                        value=filters,
                         multi=True,
                     ),
                     wcc.SelectWithLabel(
@@ -56,11 +56,7 @@ def table_selections_layout(uuid: str, responses, filters, dframe) -> wcc.Select
                             "selector": "table_responses",
                         },
                         options=[{"label": i, "value": i} for i in responses],
-                        value=[
-                            x
-                            for x in responses
-                            if ("mean" in x or "sd" in x) and not "mode" in x
-                        ],
+                        value=responses,
                         size=min(
                             20,
                             len(responses),
@@ -101,7 +97,7 @@ def varviz_selections_layout(uuid: str, filters, responses, dframe) -> wcc.Selec
                         label="color",
                         id={"id": uuid, "selector": "color"},
                         options=[
-                            {"label": elm, "value": elm} for elm in list(dframe.columns)
+                            {"label": elm, "value": elm} for elm in responses + filters
                         ],
                         value="Crop box number",
                         clearable=True,
@@ -109,7 +105,11 @@ def varviz_selections_layout(uuid: str, filters, responses, dframe) -> wcc.Selec
                     wcc.Dropdown(
                         label="size",
                         id={"id": uuid, "selector": "size"},
-                        options=[{"label": elm, "value": elm} for elm in responses],
+                        options=[
+                            {"label": elm, "value": elm}
+                            for elm in responses + ["Quality factor"]
+                            if elm != "Azimuth"
+                        ],
                         value=None,
                         clearable=True,
                     ),
