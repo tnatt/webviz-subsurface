@@ -1,0 +1,9 @@
+show = {}
+
+if show is not None:
+    if (
+        not isinstance(show, dict)
+        or ("lines" not in show)
+        or ("wellstatus" not in show)
+    ):
+        print()

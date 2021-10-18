@@ -7,64 +7,13 @@ from .selections_view import (
     table_selections_layout,
     varviz_selections_layout,
     plot_selections_layout,
+    main_display_selector,
 )
 
 
-def main_view(
-    get_uuid: Callable,
-    responses,
-    selectors,
-    channel_dframe,
-    variogram_dframe,
-    variogram_filters,
-    variogram_responses,
-    analouge_dframe,
-    analouge_selectors,
-    analouge_responses,
-) -> dcc.Tabs:
+def main_view(get_uuid: Callable, cmodel, vmodel, amodel, smdamodel) -> dcc.Tabs:
 
     tabs = [
-        wcc.Tab(
-            label="Plots",
-            value="plots",
-            children=tab_view_layout(
-                main_layout=wcc.Frame(
-                    color="white",
-                    highlight=False,
-                    style={"height": "91vh"},
-                    children=[
-                        wcc.RadioItems(
-                            vertical=False,
-                            id=get_uuid("main-plots-display-option"),
-                            options=[
-                                {
-                                    "label": "Plot with table",
-                                    "value": "plot_with_table",
-                                },
-                                {
-                                    "label": "Plot",
-                                    "value": "plot",
-                                },
-                                {
-                                    "label": "Table",
-                                    "value": "table",
-                                },
-                            ],
-                            value="plot_with_table",
-                        ),
-                        html.Div(id=get_uuid("main-plots")),
-                    ],
-                ),
-                sidebar_layout=[
-                    plot_selections_layout(
-                        uuid=get_uuid("selections-plots"),
-                        responses=responses,
-                        selectors=selectors,
-                        dframe=channel_dframe,
-                    )
-                ],
-            ),
-        ),
         wcc.Tab(
             label="Tables",
             value="tables",
@@ -77,10 +26,38 @@ def main_view(
                 ),
                 sidebar_layout=[
                     table_selections_layout(
-                        uuid=get_uuid("selections-table"),
-                        responses=responses,
-                        filters=selectors,
-                        dframe=channel_dframe,
+                        uuid=get_uuid("ui"),
+                        tab="tables",
+                        responses=cmodel.responses,
+                        filters=cmodel.selectors,
+                        dframe=cmodel.dframe,
+                    )
+                ],
+            ),
+        ),
+        wcc.Tab(
+            label="Channel visualization",
+            value="plots",
+            children=tab_view_layout(
+                main_layout=wcc.Frame(
+                    color="white",
+                    highlight=False,
+                    style={"height": "91vh"},
+                    children=[
+                        main_display_selector(
+                            uuid=get_uuid("main-plots-display-option")
+                        ),
+                        html.Div(id=get_uuid("main-plots")),
+                    ],
+                ),
+                sidebar_layout=[
+                    plot_selections_layout(
+                        uuid=get_uuid("ui"),
+                        tab="plots",
+                        responses=cmodel.responses,
+                        selectors=cmodel.selectors,
+                        dframe=cmodel.dframe,
+                        amodel=amodel,
                     )
                 ],
             ),
@@ -93,9 +70,12 @@ def main_view(
                     [
                         wcc.Frame(
                             style={"flex": 5, "height": "91vh"},
-                            children=wcc.Graph(
-                                style={"height": "91vh"}, id=get_uuid("varviz-scatter")
-                            ),
+                            children=[
+                                main_display_selector(
+                                    uuid=get_uuid("main-varviz-display-option")
+                                ),
+                                html.Div(id=get_uuid("varviz-main")),
+                            ],
                         ),
                         wcc.Frame(
                             id=get_uuid("varviz-image-wrapper"),
@@ -106,30 +86,53 @@ def main_view(
                 ),
                 sidebar_layout=[
                     varviz_selections_layout(
-                        uuid=get_uuid("selections-varviz"),
-                        dframe=variogram_dframe,
-                        filters=variogram_filters,
-                        responses=variogram_responses,
+                        uuid=get_uuid("ui"),
+                        tab="varviz",
+                        dframe=vmodel.dframe,
+                        filters=vmodel.selectors,
+                        responses=vmodel.responses,
                     )
                 ],
             ),
         ),
         wcc.Tab(
-            label="Analouge data",
-            value="analouge",
+            label="Analogue data",
+            value="analogue",
             children=tab_view_layout(
                 main_layout=wcc.Frame(
                     color="white",
                     highlight=False,
                     style={"height": "91vh"},
-                    children=html.Div(id=get_uuid("main-table-analouge")),
+                    children=html.Div(id=get_uuid("main-table-analogue")),
                 ),
                 sidebar_layout=[
                     table_selections_layout(
-                        uuid=get_uuid("selections-table-analouge"),
-                        responses=analouge_responses,
-                        filters=analouge_selectors,
-                        dframe=analouge_dframe,
+                        uuid=get_uuid("ui"),
+                        tab="analogue",
+                        responses=amodel.responses,
+                        filters=amodel.selectors,
+                        dframe=amodel.dframe,
+                    )
+                ],
+            ),
+        ),
+        wcc.Tab(
+            label="SMDA data",
+            value="smda",
+            children=tab_view_layout(
+                main_layout=wcc.Frame(
+                    color="white",
+                    highlight=False,
+                    style={"height": "91vh"},
+                    children=html.Div(id=get_uuid("main-table-smda")),
+                ),
+                sidebar_layout=[
+                    table_selections_layout(
+                        uuid=get_uuid("ui"),
+                        tab="smda",
+                        responses=smdamodel.responses,
+                        filters=smdamodel.selectors,
+                        dframe=smdamodel.dframe,
                     )
                 ],
             ),

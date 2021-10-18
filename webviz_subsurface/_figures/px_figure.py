@@ -109,9 +109,9 @@ def update_traces(figure: go.Figure, **kwargs: Any) -> go.Figure:
     facet_col = kwargs.get("facet_col")
     if kwargs.get("size") is None:
         figure.update_traces(
-            marker_size=max((20 - (1.5 * data_frame[facet_col].nunique())), 5)
+            marker_size=max((16 - (1.5 * data_frame[facet_col].nunique())), 7)
             if facet_col is not None
-            else 20,
+            else 16,
             selector=lambda t: t["type"] in ["scatter", "scattergl"],
         )
 
@@ -136,11 +136,7 @@ def set_marker_color(trace: go) -> go:
         and isinstance(trace.marker.color, str)
         and "#" in trace.marker.color
     ):
-        opacity = (
-            0.5
-            if trace.type in ["scatter", "scattergl"]
-            else marker_attributes.get("opacity", 0.7)
-        )
+        opacity = marker_attributes.get("opacity", 0.7)
         trace.update(marker_line=dict(color=trace.marker.color, width=1))
         trace.update(marker_color=hex_to_rgb(trace.marker.color, opacity=opacity))
         trace.update(marker_opacity=1)
