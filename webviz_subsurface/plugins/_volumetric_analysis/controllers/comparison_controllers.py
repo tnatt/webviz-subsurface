@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from dash import Dash, Input, Output, State, callback_context, dash_table, html
+from dash import Input, Output, State, callback, callback_context, dash_table, html
 from dash.exceptions import PreventUpdate
 
 from webviz_subsurface._figures import create_figure
@@ -24,11 +24,10 @@ from ..views.comparison_layout import (
 
 # pylint: disable=too-many-locals
 def comparison_controllers(
-    app: Dash,
     get_uuid: Callable,
     volumemodel: InplaceVolumesModel,
 ) -> None:
-    @app.callback(
+    @callback(
         Output({"id": get_uuid("main-src-comp"), "wrapper": "table"}, "children"),
         Input(get_uuid("selections"), "data"),
         Input({"id": get_uuid("main-src-comp"), "element": "display-option"}, "value"),
@@ -56,7 +55,7 @@ def comparison_controllers(
             display_option=display_option,
         )
 
-    @app.callback(
+    @callback(
         Output({"id": get_uuid("main-ens-comp"), "wrapper": "table"}, "children"),
         Input(get_uuid("selections"), "data"),
         Input({"id": get_uuid("main-ens-comp"), "element": "display-option"}, "value"),
@@ -123,6 +122,7 @@ def comparison_callback(
             responses=responses,
             abssort_on=f"{selections['Response']} diff (%)",
             groups=groupby,
+            compare_facies_fractions="FACIES" in groupby,
         )
         return comparison_table_layout(
             table=create_comaprison_table(
@@ -238,6 +238,7 @@ def create_comparison_df(
     groups: list,
     abssort_on: str = "diff (%)",
     rename_diff_col: bool = False,
+    compare_facies_fractions: bool = False,
 ) -> pd.DataFrame:
 
     value1, value2 = selections["value1"], selections["value2"]
@@ -245,7 +246,12 @@ def create_comparison_df(
     selections["filters"][compare_on] = [value1, value2]
 
     groups = groups + ["SOURCE", "ENSEMBLE"]
-    df = volumemodel.get_df(selections["filters"], groups=groups)
+
+    if compare_facies_fractions:
+        df = volumemodel.get_df_with_facies_fraction(groups, selections["filters"])
+        responses.append("FRACTION")
+    else:
+        df = volumemodel.get_df(selections["filters"], groups=groups)
 
     df = df.loc[:, groups + responses].pivot_table(
         columns=compare_on, index=[x for x in groups if x != compare_on]

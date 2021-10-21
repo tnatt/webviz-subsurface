@@ -285,6 +285,16 @@ class InplaceVolumesModel:
                 dframe["BG"] = "NA"
         return dframe
 
+    def get_df_with_facies_fraction(self, groups: list, filters: dict) -> pd.DataFrame:
+        dframe = self.get_df(
+            filters={key: value for key, value in filters.items() if key != "FACIES"},
+            groups=groups,
+        )
+        groups = [x for x in groups if x != "FACIES"]
+        df = dframe.groupby(groups) if groups else dframe
+        dframe["FRACTION"] = df["BULK"].transform(lambda x: x / x.sum())
+        return dframe[dframe["FACIES"].isin(filters["FACIES"])]
+
 
 def filter_df(dframe: pd.DataFrame, filters: dict) -> pd.DataFrame:
     """
