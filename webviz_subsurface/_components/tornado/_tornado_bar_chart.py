@@ -126,6 +126,18 @@ class TornadoBarChart:
             ]
         return []
 
+    def hover_label(self) -> List:
+        return [
+            f"<b>Sensname: {sens}</b>:<br>"
+            f"Low: <b>{self._set_si_prefix_relative(low)}</b>, "
+            f"High: <b>{self._set_si_prefix_relative(high)}</b>, "
+            for low, high, sens in zip(
+                self._tornadotable["low"],
+                self._tornadotable["high"],
+                self._tornadotable["sensname"],
+            )
+        ]
+
     @property
     def data(self) -> List:
         colors = self.create_color_list(self._tornadotable["sensname"].unique())
@@ -143,16 +155,7 @@ class TornadoBarChart:
                 textposition="auto",
                 insidetextanchor="middle",
                 hoverinfo="text",
-                hovertext=[
-                    f"<b>Sensname: {sens}</b>:<br>"
-                    f"Low: <b>{self._set_si_prefix_relative(low)}</b>, "
-                    f"High: <b>{self._set_si_prefix_relative(high)}</b>, "
-                    for low, high, sens in zip(
-                        self._tornadotable["low"],
-                        self._tornadotable["high"],
-                        self._tornadotable["sensname"],
-                    )
-                ],
+                hovertext=self.hover_label(),
                 orientation="h",
                 marker={
                     "line": {"width": 1.5, "color": "black"},
@@ -172,16 +175,7 @@ class TornadoBarChart:
                 textposition="auto",
                 insidetextanchor="middle",
                 hoverinfo="text",
-                hovertext=[
-                    f"<b>Sensname: {sens}</b>:<br>"
-                    f"Low: <b>{self._set_si_prefix_relative(low)}</b>, "
-                    f"High: <b>{self._set_si_prefix_relative(high)}</b>, "
-                    for low, high, sens in zip(
-                        self._tornadotable["low"],
-                        self._tornadotable["high"],
-                        self._tornadotable["sensname"],
-                    )
-                ],
+                hovertext=self.hover_label(),
                 orientation="h",
                 marker={
                     "line": {"width": 1.5, "color": "black"},
