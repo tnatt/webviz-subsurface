@@ -171,13 +171,13 @@ class SMDAModel:
         self.dframe["Formation"] = self.dframe.apply(
             lambda row: self.find_strat_information(row), axis=1
         )
-        self.identifiers = list(self.dframe["identifier"].unique())
+        #       self.identifiers = list(self.dframe["Architectural element"].unique())
         self.selectors = [
             "Data source",
             "Country",
             "Field",
             "Wellbore",
-            "identifier",
+            "Architectural element",
             "Formation",
         ]
         self.responses = ["thickness_md"]
@@ -185,7 +185,8 @@ class SMDAModel:
         self.colors = {
             outcrop: color
             for outcrop, color in zip(
-                self.dframe["identifier"].unique(), px.colors.qualitative.Safe
+                self.dframe["Architectural element"].unique(),
+                px.colors.qualitative.Safe,
             )
         }
 

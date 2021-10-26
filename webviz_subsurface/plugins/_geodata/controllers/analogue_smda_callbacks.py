@@ -143,7 +143,7 @@ def analogue_smda_callbacks(get_uuid: Callable, amodel, smdamodel):
             data_frame=dframe,
             x="thickness_md",
             #    y="identifier",
-            color="identifier",
+            color="Architectural element",
             color_discrete_map=smdamodel.colors,
             opacity=0.6,
         ).update_layout(
@@ -151,9 +151,9 @@ def analogue_smda_callbacks(get_uuid: Callable, amodel, smdamodel):
             margin={"l": 20, "r": 20, "t": 20, "b": 20},
         )
 
-        bardf = dframe.groupby("identifier").mean().reset_index()
+        bardf = dframe.groupby("Architectural element").mean().reset_index()
         barfig = create_outcrop_barfig(
-            bardf, y="thickness_md", x="identifier", colors=smdamodel.colors
+            bardf, y="thickness_md", x="Architectural element", colors=smdamodel.colors
         ).update_layout(
             showlegend=True,
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
