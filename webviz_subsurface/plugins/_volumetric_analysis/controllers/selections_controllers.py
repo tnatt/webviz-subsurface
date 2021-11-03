@@ -280,6 +280,11 @@ def selections_controllers(
             selected_data = page_selections["Group by"]
         if selected_tab == "tornado":
             selected_data = ["SENSNAME", page_selections["Subplots"]]
+        if selected_tab == "ens-comp":
+            selected_data = ["SENSNAME", "ENSEMBLE"]
+
+        if "SENSCASE" in selected_data:
+            selected_data.append("SENSNAME")
 
         output = {}
         for selector in ["SOURCE", "ENSEMBLE", "SENSNAME"]:
@@ -595,3 +600,56 @@ def selections_controllers(
     def _reset_ignore_value_ens_comparison(_response_change: str) -> float:
         """reset ignore value when new response is selected"""
         return 0
+
+    @callback(
+        Output(
+            {"id": get_uuid("selections"), "tab": "ens-comp", "selector": "value1"},
+            "value",
+        ),
+        Output(
+            {"id": get_uuid("selections"), "tab": "ens-comp", "selector": "value2"},
+            "value",
+        ),
+        Input(
+            {"id": get_uuid("selections"), "tab": "ens-comp", "smartnode": "value1"},
+            "selectedTags",
+        ),
+        Input(
+            {"id": get_uuid("selections"), "tab": "ens-comp", "smartnode": "value2"},
+            "selectedTags",
+        ),
+    )
+    def _update_ensemble_and_sensitivity_from_smartnode(
+        selected_value1, selected_value2
+    ):
+        if not selected_value1 or not selected_value2:
+            raise PreventUpdate
+        value1 = selected_value1[0].split(":")
+        value2 = selected_value2[0].split(":")
+        # prevent update while selecting sensitivity
+        if any(val[1] == "" for val in [value1, value2] if len(val) > 1):
+            raise PreventUpdate
+        return value1, value2
+
+    @callback(
+        Output(
+            {"id": get_uuid("selections"), "tab": "src-comp", "selector": "value1"},
+            "value",
+        ),
+        Output(
+            {"id": get_uuid("selections"), "tab": "src-comp", "selector": "value2"},
+            "value",
+        ),
+        Input(
+            {"id": get_uuid("selections"), "tab": "src-comp", "smartnode": "value1"},
+            "selectedTags",
+        ),
+        Input(
+            {"id": get_uuid("selections"), "tab": "src-comp", "smartnode": "value2"},
+            "selectedTags",
+        ),
+    )
+    def _update_source_from_smartnode(selected_value1, selected_value2):
+        if not selected_value1 or not selected_value2:
+            raise PreventUpdate
+        return selected_value1[0].split(":"), selected_value2[0].split(":")

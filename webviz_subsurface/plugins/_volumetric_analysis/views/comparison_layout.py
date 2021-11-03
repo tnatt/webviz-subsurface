@@ -109,7 +109,9 @@ def comparison_table_layout(
             html.Div(
                 style={"margin-bottom": "30px", "font-weight": "bold"},
                 children=[
-                    html.Div(f"From {selections['value1']} to {selections['value2']}"),
+                    html.Div(
+                        f"From {' '.join(selections['value1'])} to {' '.join(selections['value2'])}"
+                    ),
                     html.Div(
                         f"{filter_info.capitalize()} {selections['filters'][filter_info][0]}"
                     ),
@@ -120,44 +122,79 @@ def comparison_table_layout(
     )
 
 
-def settings_layout(uuid: str, tab: str) -> wcc.Selectors:
-    return wcc.Selectors(
-        label="⚙️ SETTINGS",
-        open_details=False,
-        children=[
-            colorby_selector(uuid, tab),
-            axis_focus_selector(uuid, tab),
-            remove_zero_responses(uuid, tab),
-            remove_non_highlighted_data(uuid, tab),
-        ],
+def smartnode_selector(
+    uuid: str, tab: str, label: str, selector_label: str, value: str, data
+):
+
+    return html.Div(
+        [
+            wcc.SmartNodeSelector(
+                id={"id": uuid, "tab": tab, "smartnode": selector_label},
+                label=label,
+                maxNumSelectedNodes=1,
+                data=data,
+                placeholder="Add new ensemble...",
+                persistence=True,
+                persistence_type="session",
+                selectedTags=[value],
+                numSecondsUntilSuggestionsAreShown=0.5,
+            ),
+            dcc.Input(
+                id={"id": uuid, "tab": tab, "selector": selector_label},
+                style={"display": "none"},
+            ),
+        ]
     )
+
+
+def smartnodedata(elements, children=None):
+    return [
+        {
+            "name": elm,
+            "children": [{"name": sens, "children": None} for sens in children[elm]]
+            if children is not None and children[elm]
+            else None,
+        }
+        for elm in elements
+    ]
 
 
 def comparison_selections(
     uuid: str, volumemodel: InplaceVolumesModel, tab: str, compare_on: str
 ) -> html.Div:
     elements = volumemodel.sources if compare_on == "SOURCE" else volumemodel.ensembles
+    sens_children = compare_on == "ENSEMBLE" and volumemodel.sensrun
+    children = None if not sens_children else volumemodel.ensemble_sensitivities
+
     return html.Div(
         children=[
             wcc.Selectors(
                 label="CONTROLS",
                 open_details=True,
                 children=[
-                    source_selector(
+                    smartnode_selector(
                         uuid,
                         tab,
                         label=f"{compare_on.capitalize()} A",
                         selector_label="value1",
-                        value=elements[0],
-                        elements=elements,
+                        value=(
+                            f"{elements[0]}:{children[elements[0]][0]}"
+                            if sens_children
+                            else elements[0]
+                        ),
+                        data=smartnodedata(elements, children),
                     ),
-                    source_selector(
+                    smartnode_selector(
                         uuid,
                         tab,
                         label=f"{compare_on.capitalize()} B",
                         selector_label="value2",
-                        value=elements[1] if compare_on == "SOURCE" else elements[-1],
-                        elements=elements,
+                        value=(
+                            f"{elements[-1]}:{children[elements[-1]][0]}"
+                            if sens_children
+                            else elements[-1 if compare_on == "ENSEMBLE" else 1]
+                        ),
+                        data=smartnodedata(elements, children),
                     ),
                     html.Div(
                         f"Difference = {compare_on.capitalize()} B - {compare_on.capitalize()} A",
@@ -173,7 +210,16 @@ def comparison_selections(
                     highlight_controls(uuid, tab),
                 ],
             ),
-            settings_layout(uuid, tab),
+            wcc.Selectors(
+                label="⚙️ SETTINGS",
+                open_details=False,
+                children=[
+                    colorby_selector(uuid, tab),
+                    axis_focus_selector(uuid, tab),
+                    remove_zero_responses(uuid, tab),
+                    remove_non_highlighted_data(uuid, tab),
+                ],
+            ),
         ]
     )
 
@@ -253,24 +299,6 @@ def highlight_controls(uuid: str, tab: str) -> html.Div:
                 ]
             ),
         ],
-    )
-
-
-def source_selector(
-    uuid: str,
-    tab: str,
-    label: str,
-    selector_label: str,
-    value: str,
-    elements: list,
-) -> wcc.Dropdown:
-
-    return wcc.Dropdown(
-        label=label,
-        id={"id": uuid, "tab": tab, "selector": selector_label},
-        options=[{"label": src, "value": src} for src in elements],
-        value=value,
-        clearable=False,
     )
 
 

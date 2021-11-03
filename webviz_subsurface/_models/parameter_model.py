@@ -105,15 +105,21 @@ class ParametersModel:
         if "SENSNAME" not in self._dataframe:
             return False
 
-        if self.dataframe["SENSNAME"].isnull().values.any():
-            raise ValueError(
-                "Ensembles with and without sensitivity data mixed - this is not supported!"
-            )
+        gen_kw_mask = self._dataframe["SENSNAME"].isnull()
+        self._dataframe.loc[gen_kw_mask, "SENSNAME"] = "🎲"
+        self._dataframe.loc[gen_kw_mask, "SENSCASE"] = "p10_p90"
 
         # set senstype from senscase
         mc_mask = self._dataframe["SENSCASE"] == "p10_p90"
         self._dataframe.loc[mc_mask, "SENSTYPE"] = "mc"
         self._dataframe.loc[~mc_mask, "SENSTYPE"] = "scalar"
+
+        self._dataframe.loc[mc_mask, "SENSCASE"] = self.dataframe.loc[
+            mc_mask, "SENSNAME"
+        ]
+        self._dataframe.loc[~mc_mask, "SENSCASE"] = self._dataframe.loc[
+            ~mc_mask, ["SENSNAME", "SENSCASE"]
+        ].agg("-".join, axis=1)
 
         return not all(
             (

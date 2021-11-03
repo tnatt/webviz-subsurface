@@ -137,6 +137,22 @@ class InplaceVolumesModel:
         return list(self._dataframe["ENSEMBLE"].unique())
 
     @property
+    def ensemble_sensitivities(self) -> List[str]:
+        data = {}
+        for ens in self.ensembles:
+            sensitivities = (
+                list(
+                    self._dataframe.loc[
+                        self._dataframe["ENSEMBLE"] == ens, "SENSCASE"
+                    ].unique()
+                )
+                if "SENSCASE" in self._dataframe
+                else []
+            )
+            data[ens] = sensitivities  # if sensitivities != ["🎲"] else []
+        return data
+
+    @property
     def property_columns(self) -> List[str]:
         return self._property_columns
 

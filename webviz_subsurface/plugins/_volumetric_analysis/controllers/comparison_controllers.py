@@ -84,14 +84,26 @@ def comparison_controllers(
         )
 
 
+def unpack_values(value1, value2, compare_on):
+    sens_comparison = value1[0] == value2[0]
+    if sens_comparison:
+        return value1[1], value2[1], "SENSCASE"
+    return value1[0], value2[0], compare_on
+
+
 def comparison_callback(
     compare_on: str,
     volumemodel: InplaceVolumesModel,
     selections: dict,
     display_option: str,
 ) -> html.Div:
+
     if selections["value1"] == selections["value2"]:
-        return html.Div("Comparison between equal sources")
+        return html.Div("Comparison between equal data")
+
+    value1, value2, compare_on = unpack_values(
+        selections["value1"], selections["value2"], compare_on
+    )
 
     # Handle None in highlight criteria input
     for key in ["Accept value", "Ignore <"]:
@@ -116,6 +128,8 @@ def comparison_callback(
             if col not in hc_responses and col != selections["Response"]
         ]
         df = create_comparison_df(
+            value1,
+            value2,
             volumemodel,
             compare_on=compare_on,
             selections=selections,
@@ -142,6 +156,8 @@ def comparison_callback(
 
     if compare_on == "SOURCE" or "REAL" in groupby:
         diffdf_real = create_comparison_df(
+            value1,
+            value2,
             volumemodel,
             compare_on=compare_on,
             selections=selections,
@@ -152,6 +168,8 @@ def comparison_callback(
 
     if "REAL" not in groupby:
         diffdf_group = create_comparison_df(
+            value1,
+            value2,
             volumemodel,
             compare_on=compare_on,
             selections=selections,
@@ -186,8 +204,8 @@ def comparison_callback(
         )
 
     if display_option == "plots":
-        resp1 = f"{selections['Response']} {selections['value1']}"
-        resp2 = f"{selections['Response']} {selections['value2']}"
+        resp1 = f"{selections['Response']} {value1}"
+        resp2 = f"{selections['Response']} {value2}"
 
         scatter_corr = create_scatterfig(
             df=df, x=resp1, y=resp2, selections=selections, groupby=groupby
@@ -233,6 +251,8 @@ def comparison_callback(
 
 
 def create_comparison_df(
+    value1,
+    value2,
     volumemodel: InplaceVolumesModel,
     compare_on: str,
     responses: list,
@@ -242,12 +262,24 @@ def create_comparison_df(
     rename_diff_col: bool = False,
 ) -> pd.DataFrame:
 
-    value1, value2 = selections["value1"], selections["value2"]
     resp = selections["Response"]
     selections["filters"][compare_on] = [value1, value2]
 
-    groups = groups + ["SOURCE", "ENSEMBLE"]
+    groups = (
+        groups + ["SOURCE", "ENSEMBLE"] + (["SENSCASE"] if volumemodel.sensrun else [])
+    )
     df = volumemodel.get_df(selections["filters"], groups=groups)
+    if volumemodel.sensrun and compare_on != "SOURCE":
+        df = df[
+            (
+                (df["ENSEMBLE"] == selections["value1"][0])
+                & (df["SENSCASE"] == selections["value1"][1])
+            )
+            | (
+                (df["ENSEMBLE"] == selections["value2"][0])
+                & (df["SENSCASE"] == selections["value2"][1])
+            )
+        ]
 
     # if no data left, or one of the selected SOURCE/ENSEMBLE is not present
     # in the dataframe after filtering, return empty dataframe
@@ -255,8 +287,10 @@ def create_comparison_df(
         return pd.DataFrame()
 
     df = df.loc[:, groups + responses].pivot_table(
-        columns=compare_on, index=[x for x in groups if x != compare_on]
+        columns=compare_on,
+        index=[x for x in groups if x not in [compare_on, "SENSCASE"]],
     )
+
     responses = [x for x in responses if x in df]
     for col in responses:
         df[col, "diff"] = df[col][value2] - df[col][value1]
