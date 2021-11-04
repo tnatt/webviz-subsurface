@@ -180,11 +180,11 @@ def selections_controllers(
             settings[selector] = {"disable": disable, "value": value}
 
         # update dropdown options based on plot type
-        if selections["Plot type"] == "scatter":
+        if settings["Plot type"]["value"] == "scatter":
             y_elm = x_elm = (
                 volumemodel.responses + volumemodel.selectors + volumemodel.parameters
             )
-        elif selections["Plot type"] in ["box", "bar"]:
+        elif settings["Plot type"]["value"] in ["box", "bar"]:
             y_elm = x_elm = volumemodel.responses + volumemodel.selectors
             if selections.get("Y Response") is None:
                 settings["Y Response"]["value"] = selected_color_by
@@ -200,12 +200,19 @@ def selections_controllers(
         settings["Y Response"]["options"] = [
             {"label": elm, "value": elm} for elm in y_elm
         ]
+
         settings["X Response"]["options"] = [
             {"label": elm, "value": elm} for elm in x_elm
         ]
+        if (
+            settings["X Response"]["value"] is not None
+            and settings["X Response"]["value"] not in x_elm
+        ):
+            settings["X Response"]["value"] = x_elm[0]
         settings["Color by"]["options"] = [
             {"label": elm, "value": elm} for elm in colorby_elm
         ]
+
         return tuple(
             update_relevant_components(
                 id_list=selector_ids,
@@ -279,15 +286,12 @@ def selections_controllers(
         if selected_tab == "table" and page_selections["Group by"] is not None:
             selected_data = page_selections["Group by"]
         if selected_tab == "tornado":
-            selected_data = ["SENSNAME", page_selections["Subplots"]]
+            selected_data = ["SENSCASE", page_selections["Subplots"]]
         if selected_tab == "ens-comp":
-            selected_data = ["SENSNAME", "ENSEMBLE"]
-
-        if "SENSCASE" in selected_data:
-            selected_data.append("SENSNAME")
+            selected_data = ["SENSCASE", "ENSEMBLE"]
 
         output = {}
-        for selector in ["SOURCE", "ENSEMBLE", "SENSNAME"]:
+        for selector in ["SOURCE", "ENSEMBLE", "SENSCASE"]:
             if selector not in page_filter_settings:
                 continue
             options = [x["value"] for x in page_filter_settings[selector]["options"]]
@@ -296,7 +300,7 @@ def selections_controllers(
             if not multi and selector_is_multi:
                 values = [
                     "rms_seed"
-                    if selector == "SENSNAME" and "rms_seed" in options
+                    if selector == "SENSCASE" and "rms_seed" in options
                     else options[0]
                 ]
             elif multi and not selector_is_multi:
@@ -627,7 +631,11 @@ def selections_controllers(
         value1 = selected_value1[0].split(":")
         value2 = selected_value2[0].split(":")
         # prevent update while selecting sensitivity
-        if any(val[1] == "" for val in [value1, value2] if len(val) > 1):
+        if any(
+            val[1] not in volumemodel.ensemble_sensitivities[val[0]]
+            for val in [value1, value2]
+            if len(val) > 1
+        ):
             raise PreventUpdate
         return value1, value2
 

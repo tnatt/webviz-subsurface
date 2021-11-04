@@ -270,15 +270,11 @@ def create_comparison_df(
     )
     df = volumemodel.get_df(selections["filters"], groups=groups)
     if volumemodel.sensrun and compare_on != "SOURCE":
+        ens1, sens1 = selections["value1"]
+        ens2, sens2 = selections["value2"]
         df = df[
-            (
-                (df["ENSEMBLE"] == selections["value1"][0])
-                & (df["SENSCASE"] == selections["value1"][1])
-            )
-            | (
-                (df["ENSEMBLE"] == selections["value2"][0])
-                & (df["SENSCASE"] == selections["value2"][1])
-            )
+            ((df["ENSEMBLE"] == ens1) & (df["SENSCASE"] == sens1))
+            | ((df["ENSEMBLE"] == ens2) & (df["SENSCASE"] == sens2))
         ]
 
     # if no data left, or one of the selected SOURCE/ENSEMBLE is not present
@@ -308,9 +304,9 @@ def create_comparison_df(
     df.columns = df.columns.map(" ".join).str.strip(" ")
 
     # remove columns where all values are nan and drop SOURCE/ENSMEBLE column
-    df = df.dropna(how="all", axis=1).drop(
-        columns=["SOURCE", "ENSEMBLE"], errors="ignore"
-    )
+    all_nan_cols = [x for x in df.columns[df.isna().all()].tolist() if "diff" not in x]
+    cols = [x for x in df.columns if x not in all_nan_cols + ["SOURCE", "ENSEMBLE"]]
+    df = df[cols]
 
     if rename_diff_col:
         df = df.rename(columns={f"{resp} diff": "diff", f"{resp} diff (%)": "diff (%)"})
