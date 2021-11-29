@@ -89,14 +89,19 @@ def table_selections_layout(
             ),
             wcc.SelectWithLabel(
                 label="Responses",
-                id={
-                    "id": uuid,
-                    "tab": tab,
-                    "selector": "table_responses",
-                },
+                id={"id": uuid, "tab": tab, "selector": "responses"},
                 options=[{"label": i, "value": i} for i in responses],
                 value=responses,
                 size=min(20, len(responses)),
+            ),
+            html.Div(
+                wcc.SelectWithLabel(
+                    label="Parameters",
+                    id={"id": uuid, "tab": tab, "selector": "parameters"},
+                    options=[{"label": i, "value": i} for i in volumemodel.parameters],
+                    size=min(20, len(volumemodel.parameters)),
+                ),
+                style={"display": "block" if volumemodel.parameters else "none"},
             ),
         ],
     )

@@ -1,4 +1,4 @@
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,7 @@ from webviz_subsurface._abbreviations.volume_terminology import (
 from webviz_subsurface._figures import create_figure
 from webviz_subsurface._models import InplaceVolumesModel
 
+from ..views.distribution_main_layout import plots_per_zone_region_layout
 from ..utils.table_and_figure_utils import (
     create_data_table,
     create_table_columns,
@@ -188,11 +189,19 @@ def distribution_controllers(
             table_groups.extend(
                 [x for x in selections["Group by"] if x not in table_groups]
             )
-        dframe = volumemodel.get_df(filters=selections["filters"], groups=table_groups)
+        parameters = (
+            selections["parameters"] if selections["parameters"] is not None else []
+        )
+        responses = (
+            selections["responses"] if selections["responses"] is not None else []
+        )
+        dframe = volumemodel.get_df(
+            filters=selections["filters"], groups=table_groups, parameters=parameters
+        )
 
         return make_table_wrapper_children(
             dframe=dframe,
-            responses=selections["table_responses"],
+            responses=responses + parameters,
             groups=selections["Group by"],
             view_height=88,
             table_type=selections["Table type"],
@@ -202,32 +211,11 @@ def distribution_controllers(
         )
 
     @callback(
-        Output(
-            {
-                "id": get_uuid("main-voldist"),
-                "chart": ALL,
-                "selector": ALL,
-                "page": "per_zr",
-            },
-            "figure",
-        ),
+        Output({"id": get_uuid("main-voldist"), "page": "per_zr"}, "children"),
         Input(get_uuid("selections"), "data"),
         State(get_uuid("page-selected"), "data"),
-        State(
-            {
-                "id": get_uuid("main-voldist"),
-                "chart": ALL,
-                "selector": ALL,
-                "page": "per_zr",
-            },
-            "id",
-        ),
     )
-    def _update_page_per_zr(
-        selections: dict,
-        page_selected: str,
-        figure_ids: List[dict],
-    ) -> list:
+    def _update_page_per_zr(selections: dict, page_selected: str) -> list:
         if page_selected != "per_zr":
             raise PreventUpdate
 
@@ -235,8 +223,13 @@ def distribution_controllers(
         if not selections["update"]:
             raise PreventUpdate
 
-        figs = {}
-        for selector in [x["selector"] for x in figure_ids]:
+        figs = []
+        selectors = [
+            x
+            for x in ["ZONE", "REGION", "FACIES", "FIPNUM", "SET"]
+            if x in volumemodel.selectors
+        ]
+        for selector in selectors:
             dframe = volumemodel.get_df(
                 filters=selections["filters"], groups=[selector]
             )
@@ -246,8 +239,8 @@ def distribution_controllers(
                 else "%{text:.3g}"
             )
             # pylint: disable=no-member
-            figs[selector] = {
-                "pie": create_figure(
+            piefig = (
+                create_figure(
                     plot_type="pie",
                     data_frame=dframe,
                     values=selections["X Response"],
@@ -257,8 +250,10 @@ def distribution_controllers(
                     color=selector,
                 )
                 .update_traces(marker_line=dict(color="#000000", width=1))
-                .update_layout(margin=dict(l=10, b=10)),
-                "bar": create_figure(
+                .update_layout(margin=dict(l=10, b=10))
+            )
+            barfig = (
+                create_figure(
                     plot_type="bar",
                     data_frame=dframe,
                     x=selector,
@@ -271,13 +266,10 @@ def distribution_controllers(
                     ),
                 )
                 .update_traces(texttemplate=texttemplate, textposition="auto")
-                .add_annotation(fluid_annotation(selections)),
-            }
-
-        output_figs = []
-        for fig_id in figure_ids:
-            output_figs.append(figs[fig_id["selector"]][fig_id["chart"]])
-        return output_figs
+                .add_annotation(fluid_annotation(selections))
+            )
+            figs.append([piefig, barfig])
+        return plots_per_zone_region_layout(figs)
 
     @callback(
         Output(

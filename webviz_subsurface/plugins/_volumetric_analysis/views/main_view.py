@@ -32,9 +32,7 @@ def main_view(
             label="Inplace distributions",
             value="voldist",
             children=tab_view_layout(
-                main_layout=distributions_main_layout(
-                    uuid=get_uuid("main-voldist"), volumemodel=volumemodel
-                ),
+                main_layout=distributions_main_layout(uuid=get_uuid("main-voldist")),
                 sidebar_layout=[
                     selections_layout(
                         uuid=get_uuid("selections"),
