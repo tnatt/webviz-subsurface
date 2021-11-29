@@ -116,7 +116,7 @@ def distribution_controllers(
 
         return custom_plotting_layout(
             figure=figure,
-            table=make_table_wrapper_children(
+            tables=make_tables(
                 dframe=dframe,
                 responses=list({selections["X Response"], selections["Y Response"]}),
                 groups=groups,
@@ -169,7 +169,7 @@ def distribution_controllers(
             filters=selections["filters"], groups=table_groups, parameters=parameters
         )
 
-        return make_table_wrapper_children(
+        return make_tables(
             dframe=dframe,
             responses=responses + parameters,
             groups=selections["Group by"],
@@ -314,7 +314,7 @@ def distribution_controllers(
 
 
 # pylint: disable=too-many-locals
-def make_table_wrapper_children(
+def make_tables(
     dframe: pd.DataFrame,
     responses: list,
     volumemodel: InplaceVolumesModel,
@@ -328,7 +328,7 @@ def make_table_wrapper_children(
     groups = groups if groups is not None else []
 
     if table_type == "Statistics table":
-        statcols = ["Mean", "Stddev", "P90", "P10", "Minimum", "Maximum"]
+        statcols = ["Mean", "Stddev", "P90", "P10", "Min", "Max"]
         groups = [x for x in groups if x != "REAL"]
         responses = [x for x in responses if x != "REAL" and x is not None]
         df_groups = dframe.groupby(groups) if groups else [(None, dframe)]
@@ -348,8 +348,8 @@ def make_table_wrapper_children(
                     "Stddev": values.std(),
                     "P10": np.nanpercentile(values, 90),
                     "P90": np.nanpercentile(values, 10),
-                    "Minimum": values.min(),
-                    "Maximum": values.max(),
+                    "Min": values.min(),
+                    "Max": values.max(),
                 }
                 if "FLUID_ZONE" not in groups:
                     data.update(
@@ -368,29 +368,24 @@ def make_table_wrapper_children(
         if data_volcols and data_properties:
             view_height = view_height / 2
 
-        return html.Div(
-            children=[
-                html.Div(
-                    style={"margin-top": "20px"},
-                    children=create_data_table(
-                        selectors=volumemodel.selectors,
-                        columns=create_table_columns(
-                            columns=move_to_end_of_list(
-                                "FLUID_ZONE", [col] + groups + statcols
-                            ),
-                            text_columns=[col] + groups,
-                            use_si_format=statcols if col == "Response" else None,
-                        ),
-                        data=data,
-                        height=f"{view_height}vh",
-                        table_id={"table_id": f"{page_selected}-{col}"},
+        return [
+            create_data_table(
+                selectors=volumemodel.selectors,
+                columns=create_table_columns(
+                    columns=move_to_end_of_list(
+                        "FLUID_ZONE", [col] + groups + statcols
                     ),
-                )
-                for col, data in zip(
-                    ["Response", "Property"], [data_volcols, data_properties]
-                )
-            ]
-        )
+                    text_columns=[col] + groups,
+                    use_si_format=statcols if col == "Response" else None,
+                ),
+                data=data,
+                height=f"{view_height}vh",
+                table_id={"table_id": f"{page_selected}-{col}"},
+            )
+            for col, data in zip(
+                ["Response", "Property"], [data_volcols, data_properties]
+            )
+        ]
 
     # if table type Mean table
     groupby_real = (
@@ -410,17 +405,14 @@ def make_table_wrapper_children(
         dframe["FLUID_ZONE"] = (" + ").join(selections["filters"]["FLUID_ZONE"])
 
     dframe = dframe[move_to_end_of_list("FLUID_ZONE", dframe.columns)]
-    return html.Div(
-        style={"margin-top": "20px"},
-        children=[
-            create_data_table(
-                selectors=volumemodel.selectors,
-                columns=create_table_columns(
-                    columns=dframe.columns, use_si_format=volumemodel.volume_columns
-                ),
-                data=dframe.iloc[::-1].to_dict("records"),
-                height=f"{view_height}vh",
-                table_id={"table_id": f"{page_selected}-meantable"},
-            )
-        ],
-    )
+    return [
+        create_data_table(
+            selectors=volumemodel.selectors,
+            columns=create_table_columns(
+                columns=dframe.columns, use_si_format=volumemodel.volume_columns
+            ),
+            data=dframe.iloc[::-1].to_dict("records"),
+            height=f"{view_height}vh",
+            table_id={"table_id": f"{page_selected}-meantable"},
+        )
+    ]

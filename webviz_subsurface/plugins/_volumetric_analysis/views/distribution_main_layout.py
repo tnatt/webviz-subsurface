@@ -67,15 +67,15 @@ def custom_plotting_main_layout(uuid: str) -> html.Div:
     )
 
 
-def custom_plotting_layout(figure: go.Figure, table: Optional[list]) -> html.Div:
-    height = "85vh" if table is None else "44vh"
+def custom_plotting_layout(figure: go.Figure, tables: Optional[list]) -> html.Div:
+    height = "85vh" if tables is None else "44vh"
     layout = [
         wcc.Graph(
             config={"displayModeBar": False}, style={"height": height}, figure=figure
         )
     ]
-    if table is not None:
-        layout.append(table)
+    if tables is not None:
+        layout.append(html.Div(table, style={"margin-top": "20px"}) for table in tables)
     return html.Div(layout)
 
 
