@@ -25,12 +25,11 @@ def selections_layout(
             html.Div(
                 style={"margin-bottom": "20px"},
                 children=[
-                    button(uuid=uuid, title="1 plot / 1 table", page_id="1p1t"),
+                    button(uuid=uuid, title="Custom plotting", page_id="custom"),
                     button(uuid=uuid, title=f"Plots per {selectors}", page_id="per_zr"),
                     button(
                         uuid=uuid, title="Convergence plot mean/p10/p90", page_id="conv"
                     ),
-                    button(uuid=uuid, title="Custom plotting", page_id="custom"),
                 ],
             ),
             plot_selections_layout(uuid, volumemodel, tab),

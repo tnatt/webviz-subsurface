@@ -1,5 +1,7 @@
+from typing import Optional
 import webviz_core_components as wcc
 from dash import html
+import plotly.graph_objects as go
 
 
 def distributions_main_layout(uuid: str) -> html.Div:
@@ -7,13 +9,8 @@ def distributions_main_layout(uuid: str) -> html.Div:
         children=[
             html.Div(
                 id={"id": uuid, "page": "custom"},
-                style={"display": "none"},
-                children=custom_plotting_layout(uuid),
-            ),
-            html.Div(
-                id={"id": uuid, "page": "1p1t"},
                 style={"display": "block"},
-                children=one_plot_one_table_layout(uuid),
+                children=custom_plotting_main_layout(uuid),
             ),
             html.Div(id={"id": uuid, "page": "per_zr"}, style={"display": "none"}),
             html.Div(
@@ -50,7 +47,7 @@ def convergence_plot_layout(uuid: str) -> html.Div:
     )
 
 
-def custom_plotting_layout(uuid: str) -> html.Div:
+def custom_plotting_main_layout(uuid: str) -> html.Div:
     return wcc.Frame(
         color="white",
         highlight=False,
@@ -59,51 +56,27 @@ def custom_plotting_layout(uuid: str) -> html.Div:
             wcc.RadioItems(
                 id={"id": uuid, "element": "plot-table-select"},
                 options=[
-                    {"label": "Plot", "value": "graph"},
-                    {"label": "Table", "value": "table"},
+                    {"label": "Plot with table", "value": "plot_and_table"},
+                    {"label": "Plot", "value": "plot"},
                 ],
-                value="graph",
+                value="plot",
                 vertical=False,
             ),
-            html.Div(
-                id={"id": uuid, "wrapper": "graph", "page": "custom"},
-                style={"display": "inline"},
-                children=wcc.Graph(
-                    id={"id": uuid, "element": "graph", "page": "custom"},
-                    config={"displayModeBar": False},
-                    style={"height": "85vh"},
-                ),
-            ),
-            html.Div(
-                id={"id": uuid, "wrapper": "table", "page": "custom"},
-                style={"display": "none"},
-            ),
+            html.Div(id={"id": uuid, "wrapper": "plot-area", "page": "custom"}),
         ],
     )
 
 
-def one_plot_one_table_layout(uuid: str) -> html.Div:
-    return html.Div(
-        children=[
-            wcc.Frame(
-                color="white",
-                highlight=False,
-                style={"height": "44vh"},
-                children=wcc.Graph(
-                    id={"id": uuid, "element": "graph", "page": "1p1t"},
-                    config={"displayModeBar": False},
-                    style={"height": "44vh"},
-                ),
-            ),
-            wcc.Frame(
-                color="white",
-                highlight=False,
-                style={"height": "44vh"},
-                id={"id": uuid, "wrapper": "table", "page": "1p1t"},
-                children=[],
-            ),
-        ]
-    )
+def custom_plotting_layout(figure: go.Figure, table: Optional[list]) -> html.Div:
+    height = "85vh" if table is None else "44vh"
+    layout = [
+        wcc.Graph(
+            config={"displayModeBar": False}, style={"height": height}, figure=figure
+        )
+    ]
+    if table is not None:
+        layout.append(table)
+    return html.Div(layout)
 
 
 def plots_per_zone_region_layout(figures: list) -> list:

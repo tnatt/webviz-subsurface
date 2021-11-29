@@ -166,7 +166,7 @@ def selections_controllers(
             "Y Response": ["per_zr", "conv"],
             "X Response": [],
             "Color by": ["per_zr", "conv"],
-            "Subplots": ["per_zr", "1p1t"],
+            "Subplots": ["per_zr"],
         }
 
         settings: Dict[str, dict] = {}

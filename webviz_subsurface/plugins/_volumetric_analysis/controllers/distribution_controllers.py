@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from dash import ALL, Input, Output, State, callback, html, no_update
+from dash import Input, Output, State, callback, html
 from dash.exceptions import PreventUpdate
 from pandas.api.types import is_numeric_dtype
 
@@ -15,13 +15,16 @@ from webviz_subsurface._abbreviations.volume_terminology import (
 from webviz_subsurface._figures import create_figure
 from webviz_subsurface._models import InplaceVolumesModel
 
-from ..views.distribution_main_layout import plots_per_zone_region_layout
+from ..views.distribution_main_layout import (
+    plots_per_zone_region_layout,
+    custom_plotting_layout,
+)
 from ..utils.table_and_figure_utils import (
     create_data_table,
     create_table_columns,
     fluid_annotation,
 )
-from ..utils.utils import move_to_end_of_list, update_relevant_components
+from ..utils.utils import move_to_end_of_list
 
 
 # pylint: disable=too-many-statements
@@ -30,10 +33,7 @@ def distribution_controllers(
 ) -> None:
     @callback(
         Output(
-            {"id": get_uuid("main-voldist"), "element": "graph", "page": ALL}, "figure"
-        ),
-        Output(
-            {"id": get_uuid("main-voldist"), "wrapper": "table", "page": ALL},
+            {"id": get_uuid("main-voldist"), "wrapper": "plot-area", "page": "custom"},
             "children",
         ),
         Input(get_uuid("selections"), "data"),
@@ -41,18 +41,12 @@ def distribution_controllers(
             {"id": get_uuid("main-voldist"), "element": "plot-table-select"}, "value"
         ),
         State(get_uuid("page-selected"), "data"),
-        State({"id": get_uuid("main-voldist"), "element": "graph", "page": ALL}, "id"),
-        State({"id": get_uuid("main-voldist"), "wrapper": "table", "page": ALL}, "id"),
     )
-    def _update_page_1p1t_and_custom(
-        selections: dict,
-        plot_table_select: str,
-        page_selected: str,
-        figure_ids: list,
-        table_wrapper_ids: list,
+    def _update_page_custom(
+        selections: dict, plot_table_select: str, page_selected: str
     ) -> tuple:
 
-        if page_selected not in ["1p1t", "custom"]:
+        if page_selected != "custom":
             raise PreventUpdate
 
         selections = selections[page_selected]
@@ -76,63 +70,53 @@ def distribution_controllers(
             filters=selections["filters"], groups=groups, parameters=parameters
         )
 
-        if not (plot_table_select == "table" and page_selected == "custom"):
-            df_for_figure = (
-                dframe
-                if not (
-                    selections["Plot type"] == "bar" and not "REAL" in selected_data
-                )
-                else dframe.groupby([x for x in groups if x != "REAL"])
-                .mean()
-                .reset_index()
-            )
-            figure = create_figure(
-                plot_type=selections["Plot type"],
-                data_frame=df_for_figure,
-                x=selections["X Response"],
-                y=selections["Y Response"],
-                nbins=selections["hist_bins"],
-                facet_col=selections["Subplots"],
-                color=selections["Color by"],
-                color_discrete_sequence=selections["Colorscale"],
-                color_continuous_scale=selections["Colorscale"],
-                barmode=selections["barmode"],
-                boxmode=selections["barmode"],
-                layout=dict(
-                    title=dict(
-                        text=(
-                            f"{volume_description(selections['X Response'])}"
-                            + (
-                                f" [{volume_unit(selections['X Response'])}]"
-                                if selections["X Response"]
-                                in volumemodel.volume_columns
-                                else ""
-                            )
-                        ),
-                        x=0.5,
-                        xref="paper",
-                        font=dict(size=18),
+        df_for_figure = (
+            dframe
+            if not (selections["Plot type"] == "bar" and not "REAL" in selected_data)
+            else dframe.groupby([x for x in groups if x != "REAL"]).mean().reset_index()
+        )
+        figure = create_figure(
+            plot_type=selections["Plot type"],
+            data_frame=df_for_figure,
+            x=selections["X Response"],
+            y=selections["Y Response"],
+            nbins=selections["hist_bins"],
+            facet_col=selections["Subplots"],
+            color=selections["Color by"],
+            color_discrete_sequence=selections["Colorscale"],
+            color_continuous_scale=selections["Colorscale"],
+            barmode=selections["barmode"],
+            boxmode=selections["barmode"],
+            layout=dict(
+                title=dict(
+                    text=(
+                        f"{volume_description(selections['X Response'])}"
+                        + (
+                            f" [{volume_unit(selections['X Response'])}]"
+                            if selections["X Response"] in volumemodel.volume_columns
+                            else ""
+                        )
                     ),
+                    x=0.5,
+                    xref="paper",
+                    font=dict(size=18),
                 ),
-                yaxis=dict(showticklabels=True),
-            ).add_annotation(fluid_annotation(selections))
+            ),
+            yaxis=dict(showticklabels=True),
+        ).add_annotation(fluid_annotation(selections))
 
-            if selections["X Response"] in volumemodel.selectors:
-                figure.update_xaxes(
-                    dict(type="category", tickangle=45, tickfont_size=12)
-                )
+        if selections["X Response"] in volumemodel.selectors:
+            figure.update_xaxes(dict(type="category", tickangle=45, tickfont_size=12))
 
-            if selections["Subplots"] is not None:
-                if not selections["X axis matches"]:
-                    figure.update_xaxes({"matches": None})
-                if not selections["Y axis matches"]:
-                    figure.update_yaxes({"matches": None})
-        else:
-            figure = no_update
+        if selections["Subplots"] is not None:
+            if not selections["X axis matches"]:
+                figure.update_xaxes({"matches": None})
+            if not selections["Y axis matches"]:
+                figure.update_yaxes({"matches": None})
 
-        # Make tables
-        if not (plot_table_select == "graph" and page_selected == "custom"):
-            table_wrapper_children = make_table_wrapper_children(
+        return custom_plotting_layout(
+            figure=figure,
+            table=make_table_wrapper_children(
                 dframe=dframe,
                 responses=list({selections["X Response"], selections["Y Response"]}),
                 groups=groups,
@@ -140,24 +124,10 @@ def distribution_controllers(
                 page_selected=page_selected,
                 selections=selections,
                 table_type="Statistics table",
-                view_height=42 if page_selected == "1p1t" else 86,
+                view_height=42,
             )
-        else:
-            table_wrapper_children = no_update
-
-        return tuple(
-            update_relevant_components(
-                id_list=id_list,
-                update_info=[
-                    {
-                        "new_value": val,
-                        "conditions": {"page": page_selected},
-                    }
-                ],
-            )
-            for val, id_list in zip(
-                [figure, table_wrapper_children], [figure_ids, table_wrapper_ids]
-            )
+            if plot_table_select == "plot_and_table"
+            else None,
         )
 
     @callback(
