@@ -185,7 +185,12 @@ def tab_view_layout(main_layout: list, sidebar_layout: list) -> wcc.FlexBox:
             ),
             html.Div(
                 style={"flex": 6, "height": "91vh"},
-                children=main_layout,
+                children=wcc.Frame(
+                    color="white",
+                    highlight=False,
+                    style={"height": "91vh"},
+                    children=main_layout,
+                ),
             ),
         ]
     )

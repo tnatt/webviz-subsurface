@@ -7,18 +7,12 @@ from ..utils.table_and_figure_utils import create_figure_matrix
 
 
 def tornado_main_layout(uuid: str) -> html.Div:
-    return html.Div(
-        children=[
-            html.Div(
-                id={"id": uuid, "page": "torn_multi"},
-                style={"display": "block"},
-            ),
-            html.Div(
-                id={"id": uuid, "page": "torn_bulk_inplace"},
-                style={"display": "none"},
-            ),
-        ]
-    )
+    return [
+        html.Div(id={"id": uuid, "page": "torn_multi"}, style={"display": "block"}),
+        html.Div(
+            id={"id": uuid, "page": "torn_bulk_inplace"}, style={"display": "none"}
+        ),
+    ]
 
 
 def tornado_plots_layout(figures: list, bottom_display: list) -> html.Div:
@@ -27,9 +21,7 @@ def tornado_plots_layout(figures: list, bottom_display: list) -> html.Div:
 
     return html.Div(
         children=[
-            wcc.Frame(
-                color="white",
-                highlight=False,
+            html.Div(
                 style={"height": "44vh" if bottom_display else "91vh"},
                 children=[
                     wcc.FlexBox(
@@ -50,9 +42,7 @@ def tornado_plots_layout(figures: list, bottom_display: list) -> html.Div:
                     for row in matrix
                 ],
             ),
-            wcc.Frame(
-                color="white",
-                highlight=False,
+            html.Div(
                 style={
                     "height": "44vh",
                     "display": "block" if bottom_display else "none",
@@ -64,12 +54,7 @@ def tornado_plots_layout(figures: list, bottom_display: list) -> html.Div:
 
 
 def tornado_error_layout(message: str) -> wcc.Frame:
-    return wcc.Frame(
-        color="white",
-        highlight=False,
-        style={"height": "91vh"},
-        children=html.Div(message, style={"margin-top": "40px"}),
-    )
+    return html.Div(message, style={"margin-top": "40px"})
 
 
 def tornado_selections_layout(

@@ -8,36 +8,31 @@ from webviz_subsurface._models import InplaceVolumesModel
 
 
 def comparison_main_layout(uuid: str) -> html.Div:
-    return wcc.Frame(
-        color="white",
-        highlight=False,
-        style={"height": "91vh"},
-        children=[
-            html.Div(
-                style={"margin-bottom": "20px"},
-                children=wcc.RadioItems(
-                    vertical=False,
-                    id={"id": uuid, "element": "display-option"},
-                    options=[
-                        {
-                            "label": "QC plots",
-                            "value": "plots",
-                        },
-                        {
-                            "label": "Difference table for selected response",
-                            "value": "single-response table",
-                        },
-                        {
-                            "label": "Difference table for multiple responses",
-                            "value": "multi-response table",
-                        },
-                    ],
-                    value="plots",
-                ),
+    return [
+        html.Div(
+            style={"margin-bottom": "20px"},
+            children=wcc.RadioItems(
+                vertical=False,
+                id={"id": uuid, "element": "display-option"},
+                options=[
+                    {
+                        "label": "QC plots",
+                        "value": "plots",
+                    },
+                    {
+                        "label": "Difference table for selected response",
+                        "value": "single-response table",
+                    },
+                    {
+                        "label": "Difference table for multiple responses",
+                        "value": "multi-response table",
+                    },
+                ],
+                value="plots",
             ),
-            html.Div(id={"id": uuid, "wrapper": "table"}),
-        ],
-    )
+        ),
+        html.Div(id={"id": uuid, "wrapper": "table"}),
+    ]
 
 
 def comparison_qc_plots_layout(
