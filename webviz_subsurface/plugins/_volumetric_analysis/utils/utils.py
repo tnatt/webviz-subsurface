@@ -1,5 +1,5 @@
 from typing import List
-
+import numpy as np
 import dash
 
 
@@ -15,3 +15,15 @@ def update_relevant_components(id_list: list, update_info: List[dict]) -> list:
 
 def move_to_end_of_list(element: str, list_of_elements: list) -> list:
     return [x for x in list_of_elements if x != element] + [element]
+
+
+def get_statistics_for_values(values):
+    return {
+        "Mean": values.mean(),
+        "Stddev": values.std(),
+        "P10": np.nanpercentile(values, 90),
+        "P90": np.nanpercentile(values, 10),
+        "Min": values.min(),
+        "Max": values.max(),
+        "Count": len(values),
+    }

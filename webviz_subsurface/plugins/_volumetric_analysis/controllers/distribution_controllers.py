@@ -1,6 +1,5 @@
 from typing import Callable, Optional
 
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -18,13 +17,14 @@ from webviz_subsurface._models import InplaceVolumesModel
 from ..views.distribution_main_layout import (
     plots_per_zone_region_layout,
     custom_plotting_layout,
+    convergence_plot_layout,
 )
 from ..utils.table_and_figure_utils import (
     create_data_table,
     create_table_columns,
     fluid_annotation,
 )
-from ..utils.utils import move_to_end_of_list
+from ..utils.utils import move_to_end_of_list, get_statistics_for_values
 
 
 # pylint: disable=too-many-statements
@@ -75,44 +75,46 @@ def distribution_controllers(
             if not (selections["Plot type"] == "bar" and not "REAL" in selected_data)
             else dframe.groupby([x for x in groups if x != "REAL"]).mean().reset_index()
         )
-        figure = create_figure(
-            plot_type=selections["Plot type"],
-            data_frame=df_for_figure,
-            x=selections["X Response"],
-            y=selections["Y Response"],
-            nbins=selections["hist_bins"],
-            facet_col=selections["Subplots"],
-            color=selections["Color by"],
-            color_discrete_sequence=selections["Colorscale"],
-            color_continuous_scale=selections["Colorscale"],
-            barmode=selections["barmode"],
-            boxmode=selections["barmode"],
-            layout=dict(
-                title=dict(
-                    text=(
-                        f"{volume_description(selections['X Response'])}"
-                        + (
-                            f" [{volume_unit(selections['X Response'])}]"
-                            if selections["X Response"] in volumemodel.volume_columns
-                            else ""
-                        )
+        figure = (
+            create_figure(
+                plot_type=selections["Plot type"],
+                data_frame=df_for_figure,
+                x=selections["X Response"],
+                y=selections["Y Response"],
+                nbins=selections["hist_bins"],
+                facet_col=selections["Subplots"],
+                color=selections["Color by"],
+                color_discrete_sequence=selections["Colorscale"],
+                color_continuous_scale=selections["Colorscale"],
+                barmode=selections["barmode"],
+                boxmode=selections["barmode"],
+                layout=dict(
+                    title=dict(
+                        text=(
+                            f"{volume_description(selections['X Response'])}"
+                            + (
+                                f" [{volume_unit(selections['X Response'])}]"
+                                if selections["X Response"]
+                                in volumemodel.volume_columns
+                                else ""
+                            )
+                        ),
+                        x=0.5,
+                        xref="paper",
+                        font=dict(size=18),
                     ),
-                    x=0.5,
-                    xref="paper",
-                    font=dict(size=18),
                 ),
-            ),
-            yaxis=dict(showticklabels=True),
-        ).add_annotation(fluid_annotation(selections))
-
-        if selections["X Response"] in volumemodel.selectors:
-            figure.update_xaxes(dict(type="category", tickangle=45, tickfont_size=12))
-
-        if selections["Subplots"] is not None:
-            if not selections["X axis matches"]:
-                figure.update_xaxes({"matches": None})
-            if not selections["Y axis matches"]:
-                figure.update_yaxes({"matches": None})
+                yaxis=dict(showticklabels=True),
+            )
+            .add_annotation(fluid_annotation(selections))
+            .update_xaxes({"matches": None} if not selections["X axis matches"] else {})
+            .update_yaxes({"matches": None} if not selections["Y axis matches"] else {})
+            .update_xaxes(
+                {"type": "category", "tickangle": 45, "tickfont_size": 12}
+                if selections["X Response"] in volumemodel.selectors
+                else {}
+            )
+        )
 
         return custom_plotting_layout(
             figure=figure,
@@ -242,10 +244,7 @@ def distribution_controllers(
         return plots_per_zone_region_layout(figs)
 
     @callback(
-        Output(
-            {"id": get_uuid("main-voldist"), "element": "plot", "page": "conv"},
-            "figure",
-        ),
+        Output({"id": get_uuid("main-voldist"), "page": "conv"}, "children"),
         Input(get_uuid("selections"), "data"),
         State(get_uuid("page-selected"), "data"),
     )
@@ -282,8 +281,8 @@ def distribution_controllers(
         if dfs:
             dframe = pd.concat(dfs)
 
-        figure = (
-            create_figure(
+        return convergence_plot_layout(
+            figure=create_figure(
                 plot_type="line",
                 data_frame=dframe,
                 x="REAL",
@@ -294,23 +293,17 @@ def distribution_controllers(
                 yaxis=dict(showticklabels=True),
             )
             .update_traces(line_width=3.5)
-            .update_traces(line=dict(color="black"), selector={"name": "mean"})
+            .update_traces(line_color="black", selector={"name": "mean"})
             .update_traces(
-                line=dict(color="firebrick", dash="dash"),
-                selector={"name": "p10"},
+                line=dict(color="firebrick", dash="dash"), selector={"name": "p10"}
             )
             .update_traces(
                 line=dict(color="royalblue", dash="dash"), selector={"name": "p90"}
             )
             .add_annotation(fluid_annotation(selections))
+            .update_xaxes({"matches": None} if not selections["X axis matches"] else {})
+            .update_yaxes({"matches": None} if not selections["Y axis matches"] else {})
         )
-
-        if selections["Subplots"] is not None:
-            if not selections["X axis matches"]:
-                figure.update_xaxes({"matches": None})
-            if not selections["Y axis matches"]:
-                figure.update_yaxes(dict(matches=None))
-        return figure
 
 
 # pylint: disable=too-many-locals
@@ -328,7 +321,7 @@ def make_tables(
     groups = groups if groups is not None else []
 
     if table_type == "Statistics table":
-        statcols = ["Mean", "Stddev", "P90", "P10", "Min", "Max"]
+        statcols = ["Mean", "Stddev", "P90", "P10", "Min", "Max", "Count"]
         groups = [x for x in groups if x != "REAL"]
         responses = [x for x in responses if x != "REAL" and x is not None]
         df_groups = dframe.groupby(groups) if groups else [(None, dframe)]
@@ -339,30 +332,21 @@ def make_tables(
             if not is_numeric_dtype(dframe[response]):
                 continue
             for name, df in df_groups:
-                values = df[response]
-                data = {
-                    "Response"
-                    if response in volumemodel.volume_columns
-                    else "Property": response,
-                    "Mean": values.mean(),
-                    "Stddev": values.std(),
-                    "P10": np.nanpercentile(values, 90),
-                    "P90": np.nanpercentile(values, 10),
-                    "Min": values.min(),
-                    "Max": values.max(),
-                }
+                data = get_statistics_for_values(df[response])
+
                 if "FLUID_ZONE" not in groups:
                     data.update(
                         FLUID_ZONE=(" + ").join(selections["filters"]["FLUID_ZONE"])
                     )
-
                 for idx, group in enumerate(groups):
                     data[group] = (
                         name if not isinstance(name, tuple) else list(name)[idx]
                     )
                 if response in volumemodel.volume_columns:
+                    data["Response"] = response
                     data_volcols.append(data)
                 else:
+                    data["Property"] = response
                     data_properties.append(data)
 
         if data_volcols and data_properties:
