@@ -289,10 +289,17 @@ def distribution_controllers(
                 y=selections["X Response"],
                 facet_col=selections["Subplots"],
                 color="calculation",
+                custom_data=["calculation"],
                 title=f"Convergence plot of mean/p10/p90 for {selections['X Response']} ",
                 yaxis=dict(showticklabels=True),
             )
-            .update_traces(line_width=3.5)
+            .update_traces(
+                hovertemplate=(
+                    f"{selections['X Response']} %{{y}} <extra>%{{customdata[0]}} "
+                    f"for realizations {dframe['REAL'].min()}-%{{x}} </extra>"
+                ),
+                line_width=3.5,
+            )
             .update_traces(line_color="black", selector={"name": "mean"})
             .update_traces(
                 line=dict(color="firebrick", dash="dash"), selector={"name": "p10"}

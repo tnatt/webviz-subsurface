@@ -7,12 +7,14 @@ from ..utils.table_and_figure_utils import create_figure_matrix
 
 
 def tornado_main_layout(uuid: str) -> html.Div:
-    return [
-        html.Div(id={"id": uuid, "page": "torn_multi"}, style={"display": "block"}),
-        html.Div(
-            id={"id": uuid, "page": "torn_bulk_inplace"}, style={"display": "none"}
-        ),
-    ]
+    return html.Div(
+        children=[
+            html.Div(id={"id": uuid, "page": "torn_multi"}, style={"display": "block"}),
+            html.Div(
+                id={"id": uuid, "page": "torn_bulk_inplace"}, style={"display": "none"}
+            ),
+        ]
+    )
 
 
 def tornado_plots_layout(figures: list, bottom_display: list) -> html.Div:

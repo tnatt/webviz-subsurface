@@ -2,7 +2,7 @@ from typing import Callable, Optional
 
 import pandas as pd
 import webviz_core_components as wcc
-from dash import dcc, html
+from dash import dcc
 from webviz_config import WebvizConfigTheme
 
 from webviz_subsurface._models import InplaceVolumesModel
@@ -183,14 +183,11 @@ def tab_view_layout(main_layout: list, sidebar_layout: list) -> wcc.FlexBox:
                 style={"flex": 1, "height": "91vh"},
                 children=sidebar_layout,
             ),
-            html.Div(
+            wcc.Frame(
                 style={"flex": 6, "height": "91vh"},
-                children=wcc.Frame(
-                    color="white",
-                    highlight=False,
-                    style={"height": "91vh"},
-                    children=main_layout,
-                ),
+                color="white",
+                highlight=False,
+                children=main_layout,
             ),
         ]
     )
