@@ -165,7 +165,7 @@ def selections_controllers(
             "Plot type": ["per_zr", "conv"],
             "Y Response": ["per_zr", "conv"],
             "X Response": [],
-            "Color by": ["per_zr", "conv"],
+            "Color by": ["conv"],
             "Subplots": ["per_zr"],
         }
 

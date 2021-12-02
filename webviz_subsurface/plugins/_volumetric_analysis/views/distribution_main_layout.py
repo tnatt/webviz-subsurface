@@ -64,23 +64,32 @@ def plots_per_zone_region_layout(figures: list) -> list:
     height = "42vh" if len(figures) < 3 else "25vh"
     return html.Div(
         children=[
+            html.Div(
+                "Pie chart available if no 'Color by' is selected",
+                style={"text-align": "right"},
+            )
+        ]
+        + [
             wcc.FlexBox(
                 style={"height": height},
                 children=[
-                    html.Div(
-                        style={"flex": 1},
-                        children=wcc.Graph(
-                            config={"displayModeBar": False},
-                            style={"height": height},
-                            figure=piefig,
-                        ),
-                    ),
                     html.Div(
                         style={"flex": 3},
                         children=wcc.Graph(
                             config={"displayModeBar": False},
                             style={"height": height},
                             figure=barfig,
+                        ),
+                    ),
+                    html.Div(
+                        style={
+                            "flex": 1,
+                            "display": "block" if piefig else "none",
+                        },
+                        children=wcc.Graph(
+                            config={"displayModeBar": False},
+                            style={"height": height},
+                            figure=piefig,
                         ),
                     ),
                 ],

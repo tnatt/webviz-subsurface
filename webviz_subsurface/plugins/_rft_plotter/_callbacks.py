@@ -1,226 +1,538 @@
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple, Union, Optional
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from dash import Input, Output, State, dash_table, html, Dash, ALL
 
 import webviz_core_components as wcc
-from dash import Dash, Input, Output, State
-from dash.exceptions import PreventUpdate
 
+
+from webviz_subsurface._figures import create_figure
 from ._business_logic import RftPlotterDataModel
-from ._crossplot_figure import update_crossplot
-from ._errorplot_figure import update_errorplot
+
 from ._formation_figure import FormationFigure
-from ._map_figure import MapFigure
-from ._misfit_figure import update_misfit_plot
+
 from ._processing import filter_frame
+from ._layout import (
+    comparison_qc_plots_layout,
+    comparison_table_layout,
+)
 
 
 def plugin_callbacks(
     app: Dash, get_uuid: Callable, datamodel: RftPlotterDataModel
 ) -> None:
     @app.callback(
-        Output(get_uuid("well"), "value"),
-        [
-            Input(get_uuid("map"), "clickData"),
-        ],
+        Output({"id": get_uuid("main"), "wrapper": "main"}, "children"),
+        Input({"id": get_uuid("main"), "element": "display-option"}, "value"),
+        Input({"id": get_uuid("selections"), "tab": "test", "selector": ALL}, "value"),
+        Input({"id": get_uuid("filters"), "selector": ALL}, "value"),
+        State({"id": get_uuid("selections"), "tab": "test", "selector": ALL}, "id"),
+        State({"id": get_uuid("filters"), "selector": ALL}, "id"),
     )
-    def _get_clicked_well(click_data: Dict[str, List[Dict[str, Any]]]) -> str:
-        if not click_data:
-            return datamodel.well_names[0]
-        for layer in click_data["points"]:
-            try:
-                return layer["customdata"]
-            except KeyError:
-                pass
-        raise PreventUpdate
+    def _update_page_ens_comp(
+        display_option: str,
+        selectors: list,
+        filters: list,
+        selector_ids,
+        filter_ids,
+    ) -> html.Div:
 
-    @app.callback(
-        Output(get_uuid("map"), "children"),
-        [
-            Input(get_uuid("map_ensemble"), "value"),
-            Input(get_uuid("map_size"), "value"),
-            Input(get_uuid("map_color"), "value"),
-            Input(get_uuid("map_date"), "value"),
-        ],
-    )
-    def _update_map(
-        ensemble: str, sizeby: str, colorby: str, dates: List[float]
-    ) -> Union[str, List[wcc.Graph]]:
-        figure = MapFigure(datamodel.ertdatadf, ensemble)
-        if datamodel.faultlinesdf is not None:
-            figure.add_fault_lines(datamodel.faultlinesdf)
-        figure.add_misfit_plot(sizeby, colorby, dates)
+        selections = {
+            id_value["selector"]: values
+            for id_value, values in zip(selector_ids, selectors)
+        }
+        selections["filters"] = {
+            id_value["selector"]: values
+            for id_value, values in zip(filter_ids, filters)
+        }
 
-        return [
-            wcc.Graph(
-                style={"height": "84vh"},
-                figure={"data": figure.traces, "layout": figure.layout},
-            )
-        ]
-
-    @app.callback(
-        Output(get_uuid("formations-graph-wrapper"), "children"),
-        [
-            Input(get_uuid("well"), "value"),
-            Input(get_uuid("date"), "value"),
-            Input(get_uuid("ensemble"), "value"),
-            Input(get_uuid("linetype"), "value"),
-            Input(get_uuid("depth_option"), "value"),
-        ],
-    )
-    def _update_formation_plot(
-        well: str, date: str, ensembles: List[str], linetype: str, depth_option: str
-    ) -> Union[str, List[wcc.Graph]]:
-
-        if not ensembles:
-            return "No ensembles selected"
-
-        if date not in datamodel.date_in_well(well):
-            raise PreventUpdate
-
-        figure = FormationFigure(
-            well=well,
-            ertdf=datamodel.ertdatadf,
-            enscolors=datamodel.enscolors,
-            depth_option=depth_option,
-            date=date,
-            ensembles=ensembles,
-            simdf=datamodel.simdf,
-            obsdf=datamodel.obsdatadf,
+        return comparison_callback(
+            compare_on="SENSNAME_CASE"
+            if selections["compare_on"] == "Sensitivity"
+            else "ENSEMBLE",
+            volumemodel=datamodel,
+            selections=selections,
+            display_option=display_option,
         )
 
-        if datamodel.formations is not None:
-            figure.add_formation(datamodel.formationdf)
 
-        figure.add_simulated_lines(linetype)
-        figure.add_additional_observations()
-        figure.add_ert_observed()
+def comparison_callback(
+    compare_on: str,
+    volumemodel,
+    selections: dict,
+    display_option: str,
+) -> html.Div:
+    if selections["value1"] == selections["value2"]:
+        return html.Div("Comparison between equal data")
 
-        return [
-            wcc.Graph(
-                style={"height": "84vh"},
-                figure={"data": figure.traces, "layout": figure.layout},
+    # Handle None in highlight criteria input
+    for key in ["Accept value", "Ignore <"]:
+        selections[key] = selections[key] if selections[key] is not None else 0
+
+    groupby = selections["Group by"] if selections["Group by"] is not None else []
+    group_on_fluid = "FLUID_ZONE" in groupby
+    hc_responses = ["STOIIP", "GIIP", "ASSOCIATEDGAS", "ASSOCIATEDOIL"]
+    # for hc responses and bo/bg the data should be grouped
+    # on fluid zone to avoid misinterpretations
+    if (
+        selections["Response"] in hc_responses + ["BO", "BG"]
+        and "FLUID_ZONE" not in groupby
+    ):
+        groupby.append("FLUID_ZONE")
+
+    if display_option == "multi-response table":
+        # select max one hc_response for a cleaner table
+        responses = [selections["Response"]] + [
+            col
+            for col in volumemodel.responses
+            if col not in hc_responses and col != selections["Response"]
+        ]
+        df = create_comparison_df(
+            volumemodel,
+            compare_on=compare_on,
+            selections=selections,
+            responses=responses,
+            abssort_on=f"{selections['Response']} diff (%)",
+            groups=groupby,
+        )
+        if df.empty:
+            return html.Div("No data left after filtering")
+
+        return comparison_table_layout(
+            table=create_comaprison_table(
+                tabletype=display_option,
+                df=df,
+                groupby=groupby,
+                selections=selections,
+                compare_on=compare_on,
+            ),
+            table_type=display_option,
+            selections=selections,
+            filter_info="SOURCE" if compare_on != "SOURCE" else "ENSEMBLE",
+        )
+
+    if compare_on == "SOURCE" or "REAL" in groupby:
+        diffdf_real = create_comparison_df(
+            volumemodel,
+            compare_on=compare_on,
+            selections=selections,
+            responses=[selections["Response"]],
+            groups=groupby + (["REAL"] if "REAL" not in groupby else []),
+            rename_diff_col=True,
+        )
+
+    if "REAL" not in groupby:
+        diffdf_group = create_comparison_df(
+            volumemodel,
+            compare_on=compare_on,
+            selections=selections,
+            responses=[selections["Response"]],
+            groups=groupby,
+            rename_diff_col=True,
+        )
+        if compare_on == "SOURCE" and not diffdf_group.empty:
+            # Add column with number of highlighted realizations
+            diffdf_group["💡 reals"] = diffdf_group.apply(
+                lambda row: find_higlighted_real_count(row, diffdf_real, groupby),
+                axis=1,
             )
+
+    df = diffdf_group if "REAL" not in groupby else diffdf_real
+    if df.empty:
+        return html.Div("No data left after filtering")
+
+    if display_option == "single-response table":
+        return comparison_table_layout(
+            table=create_comaprison_table(
+                tabletype=display_option,
+                df=df,
+                groupby=groupby,
+                selections=selections,
+                compare_on=compare_on,
+            ),
+            table_type=display_option,
+            selections=selections,
+            filter_info="SOURCE" if compare_on != "SOURCE" else "ENSEMBLE",
+        )
+
+    if display_option == "plots":
+        if "|" in selections["value1"]:
+            ens1, sens1 = selections["value1"].split("|")
+            ens2, sens2 = selections["value2"].split("|")
+            value1, value2 = (sens1, sens2) if ens1 == ens2 else (ens1, ens2)
+        else:
+            value1, value2 = selections["value1"], selections["value2"]
+
+        resp1 = f"{selections['Response']} {value1}"
+        resp2 = f"{selections['Response']} {value2}"
+
+        scatter_corr = create_scatterfig(
+            df=df, x=resp1, y=resp2, selections=selections, groupby=groupby
+        )
+        scatter_corr = add_correlation_line(
+            figure=scatter_corr, xy_min=df[resp1].min(), xy_max=df[resp1].max()
+        )
+        scatter_diff_vs_response = create_scatterfig(
+            df=df,
+            x=resp1,
+            y=selections["Diff mode"],
+            selections=selections,
+            groupby=groupby,
+            diff_mode=selections["Diff mode"],
+        )
+        scatter_diff_vs_real = (
+            create_scatterfig(
+                df=diffdf_real,
+                x="REAL",
+                y=selections["Diff mode"],
+                selections=selections,
+                groupby=groupby,
+                diff_mode=selections["Diff mode"],
+            )
+            if compare_on == "SOURCE"
+            else None
+        )
+        barfig_non_highlighted = create_barfig(
+            df=df[df["highlighted"] == "yes"],
+            groupby=groupby
+            if group_on_fluid
+            else [x for x in groupby if x != "FLUID_ZONE"],
+            diff_mode=selections["Diff mode"],
+            colorcol=resp1,
+        )
+
+    return comparison_qc_plots_layout(
+        scatter_diff_vs_real,
+        scatter_corr,
+        scatter_diff_vs_response,
+        barfig_non_highlighted,
+    )
+
+
+def create_comparison_df(
+    volumemodel,
+    compare_on: str,
+    responses: list,
+    selections: dict,
+    groups: list,
+    abssort_on: str = "diff (%)",
+    rename_diff_col: bool = False,
+) -> pd.DataFrame:
+
+    resp = selections["Response"]
+    adiitional_groups = [
+        x for x in ["SOURCE", "ENSEMBLE", "SENSNAME_CASE"] if x in volumemodel.ertdatadf
+    ]
+
+    groups = groups + adiitional_groups
+    df = volumemodel.simdf if resp == "PRESSURE" else volumemodel.ertdatadf
+
+    # filter dataframe and set values to compare against
+    if not "|" in selections["value1"]:
+        value1, value2 = selections["value1"], selections["value2"]
+        df = df[df[compare_on].isin([value1, value2])]
+    else:
+        ens1, sens1 = selections["value1"].split("|")
+        ens2, sens2 = selections["value2"].split("|")
+        if ens1 == ens2:
+            compare_on = "SENSNAME_CASE"
+        value1, value2 = (sens1, sens2) if ens1 == ens2 else (ens1, ens2)
+
+        df = df[
+            ((df["ENSEMBLE"] == ens1) & (df["SENSNAME_CASE"] == sens1))
+            | ((df["ENSEMBLE"] == ens2) & (df["SENSNAME_CASE"] == sens2))
         ]
 
-    @app.callback(
-        Output(get_uuid("linetype"), "options"),
-        Output(get_uuid("linetype"), "value"),
-        Input(get_uuid("depth_option"), "value"),
-        State(get_uuid("linetype"), "value"),
-        State(get_uuid("well"), "value"),
-        State(get_uuid("date"), "value"),
+    # if no data left, or one of the selected SOURCE/ENSEMBLE is not present
+    # in the dataframe after filtering, return empty dataframe
+    if df.empty or any(x not in df[compare_on].values for x in [value1, value2]):
+        return pd.DataFrame()
+
+    print(df)
+
+    df = df.loc[:, groups + responses].pivot_table(
+        columns=compare_on,
+        index=[x for x in groups if x not in [compare_on, "SENSNAME_CASE"]],
     )
-    def _update_linetype(
-        depth_option: str,
-        current_linetype: str,
-        current_well: str,
-        current_date: str,
-    ) -> Tuple[List[Dict[str, str]], str]:
-        if datamodel.simdf is not None:
-            df = filter_frame(
-                datamodel.simdf,
-                {"WELL": current_well, "DATE": current_date},
+
+    print(df)
+    responses = [x for x in responses if x in df]
+    for col in responses:
+        df[col, "diff"] = df[col][value2] - df[col][value1]
+        df[col, "diff (%)"] = ((df[col][value2] / df[col][value1]) - 1) * 100
+        df.loc[df[col]["diff"] == 0, (col, "diff (%)")] = 0
+    df = df[responses].replace([np.inf, -np.inf], np.nan).reset_index()
+
+    # remove rows where the selected response is nan
+    # can happen for properties where the volume columns are 0
+    df = df.loc[~((df[resp][value1].isna()) & (df[resp][value2].isna()))]
+    if selections["Remove zeros"]:
+        df = df.loc[~((df[resp]["diff"] == 0) & (df[resp][value1] == 0))]
+
+    df["highlighted"] = compute_highlighted_col(df, resp, value1, selections)
+    df.columns = df.columns.map(" ".join).str.strip(" ")
+
+    # remove columns where all values are nan and drop SOURCE/ENSMEBLE column
+    dropcols = [
+        x for x in df.columns[df.isna().all()] if "diff" not in x
+    ] + adiitional_groups
+    df = df[[x for x in df.columns if x not in dropcols]]
+
+    if rename_diff_col:
+        df = df.rename(columns={f"{resp} diff": "diff", f"{resp} diff (%)": "diff (%)"})
+
+    return df.sort_values(by=[abssort_on], key=abs, ascending=False)
+
+
+def compute_highlighted_col(
+    df: pd.DataFrame, response: str, value1: str, selections: dict
+) -> list:
+    highlight_mask = (df[response][value1] > selections["Ignore <"]) & (
+        df[response]["diff (%)"].abs() > selections["Accept value"]
+    )
+    return np.where(highlight_mask, "yes", "no")
+
+
+def find_higlighted_real_count(
+    row: pd.Series, df_per_real: pd.DataFrame, groups: list
+) -> str:
+    query = " & ".join([f"{col}=='{row[col]}'" for col in groups])
+    result = df_per_real.query(query) if groups else df_per_real
+    return str(len(result[result["highlighted"] == "yes"]))
+
+
+def create_comaprison_table(
+    tabletype: str,
+    df: pd.DataFrame,
+    groupby: list,
+    selections: dict,
+    compare_on: str,
+    use_si_format: Optional[bool] = None,
+) -> dash_table.DataTable:
+
+    diff_mode_percent = selections["Diff mode"] == "diff (%)"
+
+    if selections["Remove non-highlighted"]:
+        df = df.loc[df["highlighted"] == "yes"]
+        if df.empty:
+            return html.Div(
+                [
+                    html.Div("All data outside highlight criteria!"),
+                    html.Div(
+                        "To see the data turn off setting 'Display only highlighted data'"
+                    ),
+                ]
             )
-            if depth_option == "TVD" or (
-                depth_option == "MD"
-                and "CONMD" in datamodel.simdf
-                and len(df["CONMD"].unique()) == len(df["DEPTH"].unique())
-            ):
 
-                return [
-                    {
-                        "label": "Realization lines",
-                        "value": "realization",
-                    },
-                    {
-                        "label": "Statistical fanchart",
-                        "value": "fanchart",
-                    },
-                ], current_linetype
+    if tabletype == "multi-response table":
+        diff_cols = [x for x in df.columns if x.endswith(selections["Diff mode"])]
+        rename_dict = {x: x.split(" ")[0] for x in diff_cols}
+        df = df[groupby + diff_cols + ["highlighted"]].rename(columns=rename_dict)
 
-        return [
+        columns = create_table_columns(
+            columns=df.columns,
+            text_columns=groupby,
+            use_percentage=list(df.columns) if diff_mode_percent else None,
+        )
+    else:
+        columns = create_table_columns(
+            columns=df.columns,
+            text_columns=groupby,
+            use_si_format=list(df.columns) if use_si_format else None,
+            use_percentage=["diff (%)"],
+        )
+
+    return create_data_table(
+        selectors=groupby,
+        columns=columns,
+        height="80vh",
+        data=df.to_dict("records"),
+        table_id={"table_id": f"{compare_on}-comp-table"},
+        style_cell={"textAlign": "center"},
+        style_data_conditional=[
             {
-                "label": "Realization lines",
-                "value": "realization",
+                "if": {"filter_query": "{highlighted} = 'yes'"},
+                "backgroundColor": "rgb(230, 230, 230)",
+                "fontWeight": "bold",
             },
-        ], "realization"
-
-    @app.callback(
-        [Output(get_uuid("date"), "options"), Output(get_uuid("date"), "value")],
-        [
-            Input(get_uuid("well"), "value"),
         ],
-        [State(get_uuid("date"), "value")],
-    )
-    def _update_date(well: str, current_date: str) -> Tuple[List[Dict[str, str]], str]:
-        dates = datamodel.date_in_well(well)
-        available_dates = [{"label": date, "value": date} for date in dates]
-        date = current_date if current_date in dates else dates[0]
-        return available_dates, date
-
-    @app.callback(
-        Output(get_uuid("misfit-graph-wrapper"), "children"),
-        [
-            Input(get_uuid("well-misfitplot"), "value"),
-            Input(get_uuid("zone-misfitplot"), "value"),
-            Input(get_uuid("date-misfitplot"), "value"),
-            Input(get_uuid("ensemble-misfitplot"), "value"),
+        style_cell_conditional=[
+            {"if": {"column_id": "highlighted"}, "display": "None"}
         ],
     )
-    def _misfit_plot(
-        wells: List[str], zones: List[str], dates: List[str], ensembles: List[str]
-    ) -> Union[str, List[wcc.Graph]]:
-        df = filter_frame(
-            datamodel.ertdatadf,
-            {"WELL": wells, "ZONE": zones, "DATE": dates, "ENSEMBLE": ensembles},
+
+
+def create_scatterfig(
+    df: pd.DataFrame,
+    x: str,
+    y: str,
+    selections: dict,
+    groupby: list,
+    diff_mode: Optional[str] = None,
+) -> go.Figure:
+
+    highlight_colors = {"yes": "#FF1243", "no": "#80B7BC"}
+    colorby = (
+        selections["Color by"]
+        if selections["Color by"] == "highlighted"
+        else groupby[0]
+    )
+    df[colorby] = df[colorby].astype(str)
+
+    fig = (
+        create_figure(
+            plot_type="scatter",
+            data_frame=df,
+            x=x,
+            y=y,
+            color_discrete_sequence=px.colors.qualitative.Dark2,
+            color_discrete_map=highlight_colors if colorby == "highlighted" else None,
+            color=colorby,
+            hover_data={col: True for col in groupby},
         )
-        if df.empty:
-            return "No data matching the given filter criterias"
-
-        return update_misfit_plot(df, datamodel.enscolors)
-
-    @app.callback(
-        Output(get_uuid("crossplot-graph-wrapper"), "children"),
-        [
-            Input(get_uuid("well-crossplot"), "value"),
-            Input(get_uuid("zone-crossplot"), "value"),
-            Input(get_uuid("date-crossplot"), "value"),
-            Input(get_uuid("ensemble-crossplot"), "value"),
-            Input(get_uuid("crossplot_size"), "value"),
-            Input(get_uuid("crossplot_color"), "value"),
-        ],
+        .update_traces(marker_size=10)
+        .update_layout(margin={"l": 20, "r": 20, "t": 20, "b": 20})
     )
-    def _crossplot(
-        wells: List[str],
-        zones: List[str],
-        dates: List[str],
-        ensembles: List[str],
-        sizeby: str,
-        colorby: str,
-    ) -> Union[str, List[wcc.Graph]]:
-        df = filter_frame(
-            datamodel.ertdatadf,
-            {"WELL": wells, "ZONE": zones, "DATE": dates, "ENSEMBLE": ensembles},
-        )
-        if df.empty:
-            return "No data matching the given filter criterias"
-        return update_crossplot(df, sizeby, colorby)
+    if diff_mode is not None:
+        fig.update_yaxes(range=find_diff_plot_range(df, diff_mode, selections))
+        if diff_mode == "diff (%)" and x == "REAL":
+            fig.add_hline(y=selections["Accept value"], line_dash="dot").add_hline(
+                y=-selections["Accept value"], line_dash="dot"
+            )
+    return fig
 
-    @app.callback(
-        Output(get_uuid("errorplot-graph-wrapper"), "children"),
-        [
-            Input(get_uuid("well-errorplot"), "value"),
-            Input(get_uuid("zone-errorplot"), "value"),
-            Input(get_uuid("date-errorplot"), "value"),
-            Input(get_uuid("ensemble-errorplot"), "value"),
-        ],
-    )
-    def _errorplot(
-        wells: List[str], zones: List[str], dates: List[str], ensembles: List[str]
-    ) -> Union[str, List[wcc.Graph]]:
-        df = filter_frame(
-            datamodel.ertdatadf,
-            {"WELL": wells, "ZONE": zones, "DATE": dates, "ENSEMBLE": ensembles},
+
+def find_diff_plot_range(df: pd.DataFrame, diff_mode: str, selections: dict) -> list:
+    """
+    Find plot range for diff axis. If axis focus is selected
+    the range will center around the non-acepted data points.
+    An 10% extension is added to the axis
+    """
+    if selections["Axis focus"] and "yes" in df["highlighted"].values:
+        df = df[df["highlighted"] == "yes"]
+
+    low = min(df[diff_mode].min(), -selections["Accept value"])
+    high = max(df[diff_mode].max(), selections["Accept value"])
+    extend = (high - low) * 0.1
+    return [low - extend, high + extend]
+
+
+def create_barfig(
+    df: pd.DataFrame, groupby: list, diff_mode: str, colorcol: str
+) -> Union[None, go.Figure]:
+    if df.empty:
+        return None
+    return (
+        create_figure(
+            plot_type="bar",
+            data_frame=df,
+            x=df[groupby].astype(str).agg(" ".join, axis=1) if groupby else ["Total"],
+            y=diff_mode,
+            color_continuous_scale="teal_r",
+            color=df[colorcol],
+            hover_data={col: True for col in groupby},
+            opacity=1,
         )
-        if df.empty:
-            return "No data matching the given filter criterias"
-        return [update_errorplot(df, datamodel.enscolors)]
+        .update_layout(
+            margin={"l": 20, "r": 20, "t": 5, "b": 5},
+            bargap=0.15,
+            paper_bgcolor="rgba(0,0,0,0)",
+        )
+        .update_xaxes(title_text=None, tickangle=45, ticks="outside")
+        .update_yaxes(zeroline=True, zerolinecolor="black")
+    )
+
+
+def create_table_columns(
+    columns: list,
+    text_columns: list = None,
+    use_si_format: Optional[list] = None,
+    use_percentage: Optional[list] = None,
+) -> List[dict]:
+
+    text_columns = text_columns if text_columns is not None else []
+    use_si_format = use_si_format if use_si_format is not None else []
+    use_percentage = use_percentage if use_percentage is not None else []
+
+    table_columns = []
+    for col in columns:
+        data = {"id": col, "name": col}
+        if col not in text_columns:
+            data["type"] = "numeric"
+            if col in use_percentage:
+                data["format"] = {"specifier": ".1f"}
+            elif col in use_si_format:
+                data["format"] = {"locale": {"symbol": ["", ""]}, "specifier": "$.4s"}
+            else:
+                data["format"] = {"specifier": ".2~f"}
+        table_columns.append(data)
+    return table_columns
+
+
+def create_data_table(
+    columns: list,
+    height: str,
+    data: List[dict],
+    table_id: dict,
+    selectors: Optional[list] = None,
+    style_cell: Optional[dict] = None,
+    style_cell_conditional: Optional[list] = None,
+    style_data_conditional: Optional[list] = None,
+) -> Union[list, wcc.WebvizPluginPlaceholder]:
+
+    if not data:
+        return []
+
+    if selectors is None:
+        selectors = []
+    conditional_cell_style = [
+        {
+            "if": {"column_id": selectors + ["Response", "Property", "Sensitivity"]},
+            "width": "10%",
+            "textAlign": "left",
+        },
+        {"if": {"column_id": "FLUID_ZONE"}, "width": "10%", "textAlign": "right"},
+    ]
+    if style_cell_conditional is not None:
+        conditional_cell_style.extend(style_cell_conditional)
+
+    style_data_conditional = (
+        style_data_conditional if style_data_conditional is not None else []
+    )
+
+    return wcc.WebvizPluginPlaceholder(
+        id={"request": "table_data", "table_id": table_id["table_id"]},
+        buttons=["expand", "download"],
+        children=dash_table.DataTable(
+            id=table_id,
+            sort_action="native",
+            sort_mode="multi",
+            filter_action="native",
+            columns=columns,
+            data=data,
+            style_as_list_view=True,
+            style_cell=style_cell,
+            style_cell_conditional=conditional_cell_style,
+            style_data_conditional=style_data_conditional,
+            style_table={
+                "height": height,
+                "overflowY": "auto",
+            },
+        ),
+    )
+
+
+def add_correlation_line(figure: go.Figure, xy_min: float, xy_max: float) -> go.Figure:
+    return figure.add_shape(
+        type="line",
+        layer="below",
+        xref="x",
+        yref="y",
+        x0=xy_min,
+        y0=xy_min,
+        x1=xy_max,
+        y1=xy_max,
+        line=dict(color="black", width=2, dash="dash"),
+    )

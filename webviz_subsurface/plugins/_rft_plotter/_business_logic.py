@@ -6,7 +6,11 @@ import pandas as pd
 from webviz_config import WebvizSettings
 from webviz_config.common_cache import CACHE
 from webviz_config.webviz_store import webvizstore
-
+from webviz_subsurface._models import (
+    ParametersModel,
+    EnsembleSetModel,
+    caching_ensemble_set_model_factory,
+)
 from webviz_subsurface._datainput.fmu_input import load_csv
 from webviz_subsurface._utils.unique_theming import unique_colors
 
@@ -50,6 +54,13 @@ class RftPlotterDataModel:
                 for ens in ensembles
             }
 
+            self.emodel: EnsembleSetModel = (
+                caching_ensemble_set_model_factory.get_or_create_model(
+                    ensemble_paths=self.ens_paths,
+                )
+            )
+            self.pmodel = ParametersModel(self.emodel.load_parameters())
+
             try:
                 self.simdf = load_csv(self.ens_paths, "share/results/tables/rft.csv")
             except (KeyError, OSError):
@@ -82,6 +93,27 @@ class RftPlotterDataModel:
                 "utm_y": "NORTH",
             }
         )
+
+        # If sensitivity run merge sensitivity columns into the dataframe
+        if self.pmodel.sensrun:
+            self.ertdatadf = pd.merge(
+                self.ertdatadf, self.pmodel.sens_df, on=["ENSEMBLE", "REAL"]
+            )
+            self.simdf = pd.merge(
+                self.simdf, self.pmodel.sens_df, on=["ENSEMBLE", "REAL"]
+            )
+        self._ensemble_sensitivities = {
+            ens: (
+                list(
+                    self.pmodel.sens_df.loc[
+                        self.pmodel.sens_df["ENSEMBLE"] == ens, "SENSNAME_CASE"
+                    ].unique()
+                )
+                if "SENSNAME_CASE" in self.pmodel.sens_df
+                else []
+            )
+            for ens in self.ensembles
+        }
         self.ertdatadf["DIFF"] = (
             self.ertdatadf["SIMULATED"] - self.ertdatadf["OBSERVED"]
         )
@@ -127,6 +159,22 @@ class RftPlotterDataModel:
     @property
     def enscolors(self) -> dict:
         return unique_colors(self.ensembles)
+
+    @property
+    def selectors(self) -> dict:
+        return [
+            x
+            for x in ["ENSEMBLE", "WELL", "ZONE", "DATE", "SENSNAME_CASE"]
+            if x in self.ertdatadf
+        ]
+
+    @property
+    def sensrun(self) -> dict:
+        return self.pmodel.sensrun
+
+    @property
+    def ensemble_sensitivities(self) -> Dict[str, list]:
+        return self._ensemble_sensitivities
 
     def set_date_marks(self) -> Dict[str, Dict[str, Any]]:
         marks = {}

@@ -1,7 +1,6 @@
 from typing import Callable, Optional
 
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output, State, callback, html
 from dash.exceptions import PreventUpdate
@@ -201,28 +200,32 @@ def distribution_controllers(
             for x in ["ZONE", "REGION", "FACIES", "FIPNUM", "SET"]
             if x in volumemodel.selectors
         ]
+        color = selections["Color by"] is not None
         for selector in selectors:
-            dframe = volumemodel.get_df(
-                filters=selections["filters"], groups=[selector]
-            )
+            groups = [selector]
+            if color and selections["Color by"] != selector:
+                groups.append(selections["Color by"])
+            dframe = volumemodel.get_df(filters=selections["filters"], groups=groups)
             texttemplate = (
                 "%{text:.3s}"
                 if selections["X Response"] in volumemodel.volume_columns
                 else "%{text:.3g}"
             )
-            # pylint: disable=no-member
             piefig = (
-                create_figure(
-                    plot_type="pie",
-                    data_frame=dframe,
-                    values=selections["X Response"],
-                    names=selector,
-                    title=f"{selections['X Response']} per {selector}",
-                    color_discrete_sequence=selections["Colorscale"],
-                    color=selector,
+                (
+                    create_figure(
+                        plot_type="pie",
+                        data_frame=dframe,
+                        values=selections["X Response"],
+                        names=selector,
+                        color_discrete_sequence=selections["Colorscale"],
+                        color=selector,
+                    )
+                    .update_traces(marker_line=dict(color="#000000", width=1))
+                    .update_layout(margin=dict(l=10, b=10))
                 )
-                .update_traces(marker_line=dict(color="#000000", width=1))
-                .update_layout(margin=dict(l=10, b=10))
+                if not color
+                else []
             )
             barfig = (
                 create_figure(
@@ -230,7 +233,11 @@ def distribution_controllers(
                     data_frame=dframe,
                     x=selector,
                     y=selections["X Response"],
-                    color_discrete_sequence=px.colors.diverging.BrBG_r,
+                    title=f"{selections['X Response']} per {selector}",
+                    barmode="group"
+                    if selector != selections["Color by"]
+                    else "overlay",
+                    color_discrete_sequence=selections["Colorscale"],
                     color=selections["Color by"],
                     text=selections["X Response"],
                     xaxis=dict(
