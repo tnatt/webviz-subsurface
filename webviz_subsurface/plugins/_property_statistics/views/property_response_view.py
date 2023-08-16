@@ -1,14 +1,10 @@
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional
 
 import webviz_core_components as wcc
 import webviz_subsurface_components as wsc
 from dash import html
 
-from ..models import (
-    PropertyStatisticsModel,
-    ProviderTimeSeriesDataModel,
-    SimulationTimeSeriesModel,
-)
+from ..models import PropertyStatisticsModel, ProviderTimeSeriesDataModel
 from .selector_view import (
     ensemble_selector,
     filter_selector,
@@ -112,7 +108,7 @@ def filter_correlated_parameter(get_uuid: Callable, labels: List[str]) -> html.D
 def selector_view(
     get_uuid: Callable,
     property_model: PropertyStatisticsModel,
-    vector_model: Union[SimulationTimeSeriesModel, ProviderTimeSeriesDataModel],
+    vector_model: ProviderTimeSeriesDataModel,
     surface_folders: Optional[Dict],
 ) -> html.Div:
     return html.Div(
@@ -157,7 +153,7 @@ def selector_view(
 def property_response_view(
     get_uuid: Callable,
     property_model: PropertyStatisticsModel,
-    vector_model: Union[SimulationTimeSeriesModel, ProviderTimeSeriesDataModel],
+    vector_model: ProviderTimeSeriesDataModel,
     surface_folders: Optional[Dict],
 ) -> wcc.FlexBox:
     return wcc.FlexBox(

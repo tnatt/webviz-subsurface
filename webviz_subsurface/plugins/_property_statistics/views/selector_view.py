@@ -4,16 +4,12 @@ import webviz_core_components as wcc
 import webviz_subsurface_components as wsc
 from dash import html
 
-from ..models import (
-    PropertyStatisticsModel,
-    ProviderTimeSeriesDataModel,
-    SimulationTimeSeriesModel,
-)
+from ..models import PropertyStatisticsModel, ProviderTimeSeriesDataModel
 
 
 def vector_selector(
     get_uuid: Callable,
-    vector_model: Union[SimulationTimeSeriesModel, ProviderTimeSeriesDataModel],
+    vector_model: ProviderTimeSeriesDataModel,
 ) -> wsc.VectorSelector:
     return wsc.VectorSelector(
         id=get_uuid("property-response-vector-select"),

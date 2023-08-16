@@ -1,12 +1,8 @@
-from typing import Callable, Dict, Optional, Union
+from typing import Callable, Dict, Optional
 
 import webviz_core_components as wcc
 
-from ..models import (
-    PropertyStatisticsModel,
-    ProviderTimeSeriesDataModel,
-    SimulationTimeSeriesModel,
-)
+from ..models import PropertyStatisticsModel, ProviderTimeSeriesDataModel
 from .property_delta_view import property_delta_view
 from .property_qc_view import property_qc_view
 from .property_response_view import property_response_view
@@ -15,9 +11,7 @@ from .property_response_view import property_response_view
 def main_view(
     get_uuid: Callable,
     property_model: PropertyStatisticsModel,
-    vector_model: Optional[
-        Union[SimulationTimeSeriesModel, ProviderTimeSeriesDataModel]
-    ],
+    vector_model: Optional[ProviderTimeSeriesDataModel],
     surface_folders: Optional[Dict] = None,
 ) -> wcc.Tabs:
     tabs = [

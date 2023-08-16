@@ -13,11 +13,7 @@ from webviz_subsurface._utils.dataframe_utils import (
     merge_dataframes_on_realization,
 )
 
-from ..models import (
-    PropertyStatisticsModel,
-    ProviderTimeSeriesDataModel,
-    SimulationTimeSeriesModel,
-)
+from ..models import PropertyStatisticsModel, ProviderTimeSeriesDataModel
 from ..utils.surface import surface_from_zone_prop
 
 
@@ -25,7 +21,7 @@ def property_response_controller(
     get_uuid: Callable,
     surface_table: pd.DataFrame,
     property_model: PropertyStatisticsModel,
-    timeseries_model: Union[SimulationTimeSeriesModel, ProviderTimeSeriesDataModel],
+    timeseries_model: ProviderTimeSeriesDataModel,
     app: Dash,
 ) -> None:
     @app.callback(
