@@ -9,7 +9,9 @@ import pandas as pd
 def make_date_column_datetime_object(df: pd.DataFrame) -> pd.DataFrame:
     # Make a copy since it is likely we will modify the dataframe, and
     # we don't know if it is a view on a larger DF or a copy
-    df = df.copy()
+    # need to drop index in case index does not start from 0, otherwise
+    # we can end up with NaN values in the DATE column
+    df = df.copy().reset_index(drop=True)
 
     if "DATE" not in df.columns:
         return df

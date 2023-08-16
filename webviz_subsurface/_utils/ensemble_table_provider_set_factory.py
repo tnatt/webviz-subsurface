@@ -50,3 +50,19 @@ def create_parameter_providerset_from_paths(
             str(path), drop_failed_realizations
         )
     return EnsembleTableProviderSet(provider_dict)
+
+
+def create_provider_set_from_aggregated_csv_file(
+    aggr_csv_file: Path,
+) -> EnsembleTableProviderSet:
+    """Create set of ensemble table providers from an aggregated CSV file
+
+    `Input:`
+    * aggr_csv_file: Path -  Path to an aggregated csv-file with ENSEMBLE column
+
+    """
+    provider_factory = EnsembleTableProviderFactory.instance()
+    provider_dict = provider_factory.create_provider_set_from_aggregated_csv_file(
+        aggr_csv_file
+    )
+    return EnsembleTableProviderSet(provider_dict)
